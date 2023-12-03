@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Convergence to a Brownian motion</title>
+    <style type="text/css">
+body {
+  margin: auto;
+  max-width: 800px;
+}
+    </style>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  </head>
+  <body>
+    <p>
+    Let \(X_1, X_2, \ldots\) be independent and identically distributed coin tosses:
+    \(
+        \mathbb{P}(X_k = -1) 
+        = \mathbb{P}(X_k = 1)
+        = 1/2
+    \).
+    Let
+    \[
+        W_n(t) = \frac{1}{\sqrt{n}} \bigl( X_1 + \cdots + X_{\lfloor nt \rfloor } \bigr)
+        .
+    \]
+    We plot \(W_n(t)\), \(0 \leq t \leq 1\). We send \(n \to \infty\) and animate the graph.
+    </p>
+    <div>
+      <canvas id="table" height=600px width=800px></canvas>
+    </div>
+    <p><div id="reportDiv"></div></p>
+    <script language="javascript" type="text/javascript" src="coins.js"></script>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Convergence to a decorated Lévy process</title>
+    <style type="text/css">
+body {
+  margin: auto;
+  max-width: 800px;
+}
+    </style>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  </head>
+  <body>
+    <p>
+    Consider Birkhoff sums \(S_n = \sum_{k &lt; n} v \circ T^k \) where \(T\) is a billiard with a flat cusp
+    and stability index \(\alpha = \frac{3}{2}\), and \(v\) is an observable given by
+    \( v(r, \varphi) = \cos(5 \varphi) \). Here \(\varphi\) is the post-collisional angle between particle's velocity and
+    the normal to the boundary.
+    </p>
+    <p>
+    We choose a random initial condition
+    and plot the process \(W_n(t)\), \(0 \leq t \leq 1\), given by
+    \[ W_n(t) = \frac{1}{n^{2/3}} S_{\lfloor n t \rfloor} . \]
+    We send \(n \to \infty\) and animate the graph.
+    We also plot in light grey the graphs of \(t \mapsto c \, t^{2/3}\) with a few different values of \(c\).
+    </p>
+    <p>
+    Refresh the page to restart with a new initial contition.
+    </p>
+    <div>
+      <canvas id="table" height=600px width=800px></canvas>
+    </div>
+    <p><div id="reportDiv"></div></p>
+    <script language="javascript" type="text/javascript" src="../cusp/jz-cusp.js"></script>
+    <script language="javascript" type="text/javascript" src="cusp.js"></script>
+  </body>
+</html>

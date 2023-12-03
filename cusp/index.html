@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Biliard with cusp</title>
+    <style type="text/css">
+body {
+  margin: auto;
+  max-width: 512px;
+}
+    </style>
+    <script language="javascript" type="text/javascript" async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/latest.js?config=TeX-MML-AM_CHTML">
+    </script>
+  </head>
+  <body>
+    <div>
+      <canvas id="table" height=512px width=512px></canvas>
+    </div>
+    <div id="speedValue"></div>
+    <div>
+        <input id="speedSlider" style="width:100%" type="range" min="0" max="512" value="196" class="slider">
+    </div>
+    <div id="betaValue"></div>
+    <div>
+        <input id="betaSlider" style="width:100%" type="range" min="0" max="512" value="256" class="slider">
+    </div>
+    <p>
+        This is an animation of a billiard with a cusp. The boundaries of the billiard
+        table are the curves 
+        \[
+          x = 1
+          \qquad \text{and} \qquad 
+          y = \pm \alpha x^\beta
+          .
+        \]
+        For the purpose of this animation, we fix \(\alpha = 0.5\) (so the table fits
+        in the square \([0,1] \times [-0.5,0.5]\)). 
+    </p>
+    <p>
+        The particle is a point (radius is zero); it is displayed as a disk
+        with positive radius so that it can be seen.
+    </p>
+    <script language="javascript" type="text/javascript" src="jz-cusp.js"></script>
+    <script language="javascript" type="text/javascript" src="cusp-flow.js"></script>
+  </body>
+</html>
