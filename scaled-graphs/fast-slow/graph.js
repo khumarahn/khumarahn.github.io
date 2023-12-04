@@ -42,29 +42,6 @@ var downSamplePlugin = {
             return;
         }
 
-        function straighten(d, dx, dy) {
-            if (d.length > 2 && d[d.length - 1] != null && d[d.length - 2] != null && d[d.length - 3] != null) {
-                let x1 = d[d.length - 3].x;
-                let y1 = d[d.length - 3].y;
-                let x2 = d[d.length - 2].x;
-                let y2 = d[d.length - 2].y;
-                let x3 = d[d.length - 1].x;
-                let y3 = d[d.length - 1].y;
-                let ddx = 0.0, ddy = 0.0;
-                let a = (x2 - x1) * (x3 - x1) + (y2 - y1) * (y3 - y1);
-                let b = (x3 - x1) * (x3 - x1) + (y3 - y1) * (y3 - y1);
-                if (y3 != y1 && x3 != x1 && a >= 0 && a <= b) {
-                    ddx = Math.abs(x1 - x2 + (x3 - x1) * (y2 - y1) / (y3 - y1));
-                    ddy = Math.abs(y1 - y2 + (y3 - y1) * (x2 - x1) / (x3 - x1));
-                    if (ddx < dx && ddy < dy) {
-                        let dl = d.pop();
-                        d.pop();
-                        d.push(dl);
-                    }
-                }
-            }
-        }
-        
         let xmin = chart.scales["x-axis-0"].min;
         let xmax = chart.scales["x-axis-0"].max;
         if (!xmin) {
@@ -127,10 +104,6 @@ var downSamplePlugin = {
                     data_xy.push(null);
                 }
             }
-
-            //straighten(data_x, dx, dy);
-            //straighten(data_y, dx, dy);
-            //straighten(data_xy, dx, dy);
         }
 
         //chart.data.datasets[0].pointRadius = 0;
