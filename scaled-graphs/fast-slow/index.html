@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Graphs of fast-slow systems</title>
+    <style type="text/css">
+body {
+    margin: auto;
+    max-width: 55em;
+}
+    </style>
+    <script language="javascript" type="text/javascript" async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/latest.js?config=TeX-MML-AM_CHTML">
+    </script>
+  </head>
+  <body>
+    <h2>
+        Graphs of fast-slow systems
+    </h2>
+    <p>
+      Given a dynamical system \(f \colon M \to M\), we consider a skew product
+      \[
+        \begin{cases}
+          s_{n+1} = \varphi(s_n, x_n, \varepsilon), \\
+          x_{n+1} = f(x_n).
+        \end{cases}      
+      \]
+      with \(x_0\) and \(s_0\) given. 
+      Here \(\varphi\) is an \(\mathbb{R}^2\)-valued function.
+      We fix \(n \in \mathbb{N}\) and  \(\varepsilon = \varepsilon(n) &gt; 0\),
+      and plot two dimensional càdlàg paths \(S(t) = s_{\lfloor n t \rfloor}\) on \(0 &le; t &le; 1\).
+    </p>
+    <p>
+      Take a look at the preset maps in the form below. Most peculiar, probably, is the collision map for
+      <a href="../cusp-flow.html">a billiard with a cusp</a>.
+    </p>
+    <canvas id="graph" height="77vw" width=100vw></canvas>
+    <br />
+    <div id="info" style="color:gray;font-size:75%;text-align:center;"></div>
+    <br />
+    <form id="input" onsubmit="return false;">
+       <table style="margin:auto">
+         <tr>
+           <td>
+             f(x):
+          </td>
+          <td>
+            <input type="text" id="f" size="42" value="CUSP(x, 1/3, 3)" />
+          </td>
+        </tr>
+        <tr>
+           <td>
+             x<sub>0</sub>:
+          </td>
+          <td>
+              <input type="text" id="x0" size="42" value="{x: 0.5, y: 0.0, theta: 0.23, phi: 0}" />
+          </td>
+         </tr>
+        <tr>
+           <td>
+             s<sub>0</sub>:
+          </td>
+          <td>
+              <input type="text" id="s0" size="42" value="{x: 0.0, y: 0.2}" />
+          </td>
+         </tr>
+         <tr>
+           <td>
+             φ(s, x, eps):
+           </td>
+           <td>
+               <input type="text" id="observable" size="42" value="{x: s.x + eps * Math.cos(3*x.phi), y: s.y + eps * Math.cos(5*x.phi)}" />
+           </td>
+         </tr>
+         <tr>
+           <td>
+             n:
+           </td>
+           <td>
+             <input type="text" id="n" size="42" value="100000" />
+           </td>
+         </tr>
+         <tr>
+           <td>
+             \(\varepsilon\):
+           </td>
+           <td>
+             <input type="text" id="cn" size="42" value="Math.pow(n, -2/3)" />
+           </td>
+         </tr>
+         <tr>
+           <td>
+             p:
+           </td>
+           <td>
+             <input type="text" id="pvar_p" size="42" value="3" />
+           </td>
+         </tr>
+         <tr>
+           <td colspan="2">
+             <button onclick="form_click()" style="width:100%">Plot</button>
+           </td>
+         </tr>
+         <tr>
+           <td colspan="2">
+             <button onclick="get_tikz_data()" style="width:100%">Download graph data</button>
+           </td>
+         </tr>
+         <tr>
+           <td>
+             Preset:
+           </td>
+           <td>
+             <select id="preset" onchange="set_defaults()" onfocus="this.selectedIndex = 0;">
+               <option value=""></option>
+               <option value="SLSV:Levy">Symmetric LSV, Lévy process</option>
+             </select>
+           </td>
+         </tr>
+       </table>
+    </form>
+    <p>
+      Use javascript. There are a few preprogrammed functions:
+      <ul>
+          <li> 
+              Liverani-Saussol-Vaienti Pomeau-Manneville intermittent map
+              \[
+                \text{LSV}(x, \alpha) = \begin{cases}
+                  x (1 + 2^\alpha x^\alpha), &amp; x \leq 0.5 \\
+                  2x - 1, &amp; x \gt 0.5
+                \end{cases}
+              \]
+          </li>
+          <li>
+              Symmetrized version of the intermittent map
+              \[
+                \text{SLSV}(x, \alpha) = \begin{cases}
+                  \text{LSV}(x, \alpha), &amp; x \leq 0.5 \\
+                  1 - \text{LSV}(1 - x, \alpha), &amp; x \gt 0.5
+                \end{cases}
+              \]
+          </li>
+          <li>
+              Collision map for <a href="../../cusp/cusp-flow.html">a billiard with a cusp</a>,
+              as in Jung and Zhang <a href="https://arxiv.org/abs/1611.00879">arXiv:1611.00879</a>.
+              The billiard table is bounded by the curves
+              \[
+                x = 1
+                \qquad \text{and} \qquad 
+                y = \pm \alpha x^\beta
+                .
+              \]
+              The code expects that \(\beta \gt 1\) and \(\alpha \gt 0\). Following Jung and Zhang,
+              we suggest \(\beta \gt 2\) and \(\alpha = 1 / \beta\).
+              The javascript code is <code>CUSP(x, alpha, beta)</code>, where, for example,
+<code style=display:block;white-space:pre-wrap>    x = {
+        x: 0.5,
+        y: 0.0,
+        theta: Math.PI / 2,
+        phi: 0.0
+    } </code>
+              Here (x.x, x.y) is a point on the plane, x.theta is a
+              velocity angle, measured anti-clockwise with respect to the positive \(x\) axes,
+              and x.phi is the collision angle, measured anti-clockwise with respect to the normal
+              vector at collision point.
+              The initial condition does not have to be on the boundary, and the initial phi is
+              ignored.
+          </li>
+      </ul>
+    </p>
+    <p style="font-size:80%">
+      We use <code>hammer.js</code> and <code>Chart.js</code>.
+    </p>
+    <script language="javascript" type="text/javascript" src="../hammer.min.js"></script>
+    <script language="javascript" type="text/javascript" src="../Chart.min.js"></script>
+    <script language="javascript" type="text/javascript" src="../chartjs-plugin-zoom.min.js"></script>
+    <script language="javascript" type="text/javascript" src="../../jz-cusp.js"></script>
+    <script language="javascript" type="text/javascript" src="../p_var.js"></script>
+    <script language="javascript" type="text/javascript" src="graph.js"></script>
+  </body>
+</html>

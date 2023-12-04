@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Graphs of Birkhoff sums</title>
+    <style type="text/css">
+body {
+    margin: auto;
+    max-width: 55em;
+}
+    </style>
+    <script language="javascript" type="text/javascript" async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/latest.js?config=TeX-MML-AM_CHTML">
+    </script>
+  </head>
+  <body>
+    <h2>
+        Graphs of Birkhoff sums: topologies of weak convergence
+    </h2>
+    <p>
+      Given a dynamical system \(f \colon M \to M\), an observable \(\varphi \colon M \to \mathbb{R}\),
+      an initial condition \(x_0 \in M\) and a normalizing sequence \(c_n\),
+      we plot càdlàg paths \(S \colon [0,1] \to \mathbb{R}\),
+      \[
+        S(t) = c_n \sum_{j=0}^{\lfloor nt \rfloor -1} \varphi (f^j(x_0))
+        .
+      \]
+      If \(x_0\) is random, we expect weak convergence to a Brownian motion in uniform topology,
+      or to a Lévy process in a topology which depends on the system and the observable.
+    </p>
+    <p>
+      For no specific reason, we compute the <a href="https://en.wikipedia.org/wiki/P-variation">p-variation</a>
+      and the <a href="https://en.wikipedia.org/wiki/Quadratic_variation">quadratic variation</a> of \(S\).
+    </p>
+    <p>
+      Take a look at the preset maps in the form below. Most peculiar, probably, is the collision map for
+      <a href="cusp-flow.html">a billiard with a cusp</a>.
+    </p>
+    <canvas id="graph" height="77vw" width=100vw></canvas>
+    <br />
+    <div id="info" style="color:gray;font-size:75%;text-align:center;"></div>
+    <br />
+    <form id="input" onsubmit="return false;">
+       <table style="margin:auto">
+         <tr>
+           <td>
+             f(x):
+          </td>
+          <td>
+            <input type="text" id="f" size="42" value="4 * x * (1 - x)" />
+          </td>
+        </tr>
+        <tr>
+           <td>
+             x<sub>0</sub>:
+          </td>
+          <td>
+              <input type="text" id="x0" size="42" value="1/3" />
+          </td>
+         </tr>
+         <tr>
+           <td>
+             φ(x):
+           </td>
+           <td>
+             <input type="text" id="observable" size="42" value="Math.cos(2 * Math.PI * x)" />
+             <input type="checkbox" id="observable_bridge" checked />
+             subtract mean
+           </td>
+         </tr>
+         <tr>
+           <td>
+             n:
+           </td>
+           <td>
+             <input type="text" id="n" size="42" value="100000" />
+           </td>
+         </tr>
+         <tr>
+           <td>
+             c<sub>n</sub>:
+           </td>
+           <td>
+             <input type="text" id="cn" size="42" value="Math.pow(n, -0.5)" />
+           </td>
+         </tr>
+         <tr>
+           <td>
+             p-var:
+           </td>
+           <td>
+             <input type="text" id="pvar_p" size="42" value="3" />
+             <input type="checkbox" id="pvar_compute" checked />
+             compute
+           </td>
+         </tr>
+         <tr>
+           <td colspan="2">
+             <button onclick="form_click()" style="width:100%">Plot</button>
+           </td>
+         </tr>
+         <tr>
+           <td colspan="2">
+             <button onclick="download_graph_data()" style="width:100%">Download graph data</button>
+           </td>
+         </tr>
+         <tr>
+           <td>
+             Preset:
+           </td>
+           <td>
+             <select id="preset" onchange="set_defaults()" onfocus="this.selectedIndex = 0;">
+               <option value=""></option>
+               <option value="Gauss:Brownian">Gauss continued fraction map, Brownian motion</option>
+               <option value="3x:Brownian">3x mod 1, Brownian motion</option>
+               <option value="3x:Levy">3x mod 1, Lévy process</option>
+               <option value="LSV:Levy">LSV, Lévy process</option>
+               <option value="LSV:Brownian">LSV, Brownian motion</option>
+               <option value="SLSV:Levy">Symmetric LSV, Lévy process</option>
+               <option value="SLSV:Brownian">Symmetric LSV, Brownian motion</option>
+               <option value="SLSV:uBrownian">Symmetric LSV, unexpected Brownian motion</option>
+               <option value="CUSP:Levy">Billiard with a cusp, Lévy process, not M<sup>2</sup></option>
+               <option value="CUSP:LevyM">Billiard with a cusp, Lévy process, M<sup>2</sup></option>
+               <option value="CUSP:Brownian">Billiard with a cusp, unexpected Brownian motion (?)</option>
+             </select>
+           </td>
+         </tr>
+       </table>
+    </form>
+    <p>
+      The "subtract mean" option computes the mean as
+      \[
+      \text{mean} = \frac{1}{2n} \sum_{j=2n}^{4n-1} \varphi (f^j(x_0))
+        .
+      \]
+    </p>
+    <p>
+      Use javascript. There are a few preprogrammed functions:
+      <ul>
+          <li> 
+              Liverani-Saussol-Vaienti Pomeau-Manneville intermittent map
+              \[
+                \text{LSV}(x, \alpha) = \begin{cases}
+                  x (1 + 2^\alpha x^\alpha), &amp; x \leq 0.5 \\
+                  2x - 1, &amp; x \gt 0.5
+                \end{cases}
+              \]
+          </li>
+          <li>
+              Symmetrized version of the intermittent map
+              \[
+                \text{SLSV}(x, \alpha) = \begin{cases}
+                  \text{LSV}(x, \alpha), &amp; x \leq 0.5 \\
+                  1 - \text{LSV}(1 - x, \alpha), &amp; x \gt 0.5
+                \end{cases}
+              \]
+          </li>
+          <li>
+              Collision map for <a href="cusp-flow.html">a billiard with a cusp</a>,
+              as in Jung and Zhang <a href="https://arxiv.org/abs/1611.00879">arXiv:1611.00879</a>.
+              The billiard table is bounded by the curves
+              \[
+                x = 1
+                \qquad \text{and} \qquad 
+                y = \pm \alpha x^\beta
+                .
+              \]
+              The code expects that \(\beta \gt 1\) and \(\alpha \gt 0\). Following Jung and Zhang,
+              we suggest \(\beta \gt 2\) and \(\alpha = 1 / \beta\).
+              The javascript code is <code>CUSP(x, alpha, beta)</code>, where, for example,
+<code style=display:block;white-space:pre-wrap>    x = {
+        x: 0.5,
+        y: 0.0,
+        theta: Math.PI / 2,
+        phi: 0.0
+    } </code>
+              Here (x.x, x.y) is a point on the plane, x.theta is a
+              velocity angle, measured anti-clockwise with respect to the positive \(x\) axes,
+              and x.phi is the collision angle, measured anti-clockwise with respect to the normal
+              vector at collision point.
+              The initial condition does not have to be on the boundary, and the initial phi is
+              ignored.
+          </li>
+      </ul>
+    </p>
+    <p style="font-size:80%">
+      We use <code>hammer.js</code> and <code>Chart.js</code>.
+    </p>
+    <script language="javascript" type="text/javascript" src="hammer.min.js"></script>
+    <script language="javascript" type="text/javascript" src="Chart.min.js"></script>
+    <script language="javascript" type="text/javascript" src="chartjs-plugin-zoom.min.js"></script>
+    <script language="javascript" type="text/javascript" src="../cusp/jz-cusp.js"></script>
+    <script language="javascript" type="text/javascript" src="p_var.js"></script>
+    <script language="javascript" type="text/javascript" src="graph.js"></script>
+  </body>
+</html>
