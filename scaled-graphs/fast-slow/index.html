@@ -32,7 +32,7 @@ body {
     </p>
     <p>
       Take a look at the preset maps in the form below. Most peculiar, probably, is the collision map for
-      <a href="../cusp-flow.html">a billiard with a cusp</a>.
+      <a href="../../cusp/">a billiard with a flat cusp</a>.
     </p>
     <canvas id="graph" height="77vw" width=100vw></canvas>
     <br />
@@ -93,7 +93,7 @@ body {
              p:
            </td>
            <td>
-             <input type="text" id="pvar_p" size="42" value="3" />
+             <input type="text" id="pvar_p" size="42" value="3/2 + 1/4" />
            </td>
          </tr>
          <tr>
@@ -112,7 +112,7 @@ body {
            </td>
            <td>
              <select id="preset" onchange="set_defaults()" onfocus="this.selectedIndex = 0;">
-               <option value=""></option>
+               <option value="CUSP:CKM23">Billiard with flat cusp</option>
                <option value="SLSV:Levy">Symmetric LSV, Lévy process</option>
              </select>
            </td>
@@ -141,7 +141,7 @@ body {
               \]
           </li>
           <li>
-              Collision map for <a href="../../cusp/cusp-flow.html">a billiard with a cusp</a>,
+              Collision map for <a href="../../cusp/">a billiard with a flat cusp</a>,
               as in Jung and Zhang <a href="https://arxiv.org/abs/1611.00879">arXiv:1611.00879</a>.
               The billiard table is bounded by the curves
               \[

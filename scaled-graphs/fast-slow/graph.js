@@ -8,16 +8,24 @@ function set_defaults() {
     let o = document.getElementById("observable");
     let c = document.getElementById("cn");
     let s0 = document.getElementById("s0");
+    let n = document.getElementById("n");
+    let pvar_p =  document.getElementById("pvar_p");
     if (sel == "SLSV:Levy") {
         f.value = "SLSV(x, 0.6)";
         x.value = "0.2";
         s0.value = "{x: 1.0, y: 0.0}";
         o.value = "{x: s.x - eps * 4 * s.y * (x-0.5), y: s.y + eps * 4 * s.x * (x-0.5)}";
         c.value = "Math.pow(n, -0.6)";
+    } else if (sel == "CUSP:CKM23") {
+        f.value = "CUSP(x, 1/3, 3)";
+        x.value = "{x: 0.5, y: 0.0, theta: 0.23, phi: 0}";
+        s0.value = "{x: 0.0, y: 0.0}";
+        o.value = "{x: s.x + eps * Math.cos(3*x.phi), y: s.y + eps * Math.cos(5*x.phi)}";
+        c.value = "Math.pow(n, -2/3)";
+        n.value = "5000";
+        pvar_p.value = "3/2 + 1/4";
     }
 }
-
-
 
 let input = {}; //f,phi,x0,n,cn,pvar_p,pvar_compute;
 
