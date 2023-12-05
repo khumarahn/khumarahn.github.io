@@ -23,20 +23,32 @@ betaSlider.oninput = function() {
 betaSlider.oninput();
 
 let f_table = document.querySelector("#table");
-let f_table2d = f_table.getContext("2d");
+let f_table_pre = f_table.getContext("bitmaprenderer");
 
 let W = f_table.width;
 let H = f_table.height;
 
-let table = document.createElement('canvas');
-table.width = W;
-table.height = H;
+let table = new OffscreenCanvas(W, H);
 let table2d = table.getContext("2d");
+let table_bitmap = table.transferToImageBitmap();
 
-let table_bg = document.createElement('canvas');
-table_bg.width = W;
-table_bg.height = H;
-let table_bg2d = table_bg.getContext("2d");
+let table_bg = new OffscreenCanvas(W, H);
+let table_bg2d = table_bg.getContext("2d", { willReadFrequently: true });
+let table_bg2d_image = table_bg2d.getImageData(0,0,W,H);
+
+let R = 5;
+let p_canvas = document.createElement('canvas');
+let p_canvas2d = p_canvas.getContext("2d");
+{
+    p_canvas2d.fillStyle = 'rgba(200,0,0,0.8)';
+    p_canvas2d.clearRect(0,0, 2*R + 1, 2*R + 1);
+    p_canvas2d.beginPath();
+    p_canvas2d.arc(R, R, R, 0, Math.PI*2);
+    p_canvas2d.closePath();
+    p_canvas2d.fill();
+}
+let p_canvas_image = new Image();
+p_canvas_image.src = p_canvas.toDataURL();
 
 let p = {
     x: 0.5, 
@@ -72,13 +84,14 @@ function drawTable() {
     }
     table_bg2d.closePath();
     table_bg2d.fill();
+
+    table_bg2d_image = table_bg2d.getImageData(0,0,W,H);
 }
 
 function drawParticles(timestamp) {
 
     // draw the current state
-    f_table2d.drawImage(table_bg,0,0);
-    f_table2d.drawImage(table,0,0);
+    f_table_pre.transferFromImageBitmap(table_bitmap);
 
     // prepare the next
     if (configChanged) {
@@ -88,20 +101,18 @@ function drawParticles(timestamp) {
         while (Math.abs(p.y) > my) {
             p.y = Math.sign(p.y) * my;
         }
+
+        configChanged = false;
     }
+    
     p = CUSPt(p, alpha, beta, speed / 32);
     
-    table2d.clearRect(0,0,W,H);
+    table2d.putImageData(table_bg2d_image, 0, 0);
+    table2d.drawImage(p_canvas_image, tx(p.x) - R, ty(p.y) - R);
 
-    table2d.fillStyle = 'rgba(200,0,0,0.8)';
-        
-    table2d.beginPath();
-    table2d.arc(tx(p.x), ty(p.y), 5, 0, Math.PI*2);
-    table2d.closePath();
-    table2d.fill();
+    table_bitmap = table.transferToImageBitmap();
 
     requestAnimationFrame(drawParticles);
-    //setTimeout(drawParticles,5000);
 }
 
 drawParticles(0);

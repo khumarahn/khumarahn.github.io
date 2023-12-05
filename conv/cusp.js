@@ -4,14 +4,12 @@ let reportDiv = document.getElementById("reportDiv");
 let last_report_timestamp = 0;
 
 let f_table = document.querySelector("#table");
-let f_table2d_pre = f_table.getContext("bitmaprenderer");
+let f_table_pre = f_table.getContext("bitmaprenderer");
 
 let W = f_table.width;
 let H = f_table.height;
 
 let table = new OffscreenCanvas(W, H);
-table.width = W;
-table.height = H;
 let table2d = table.getContext("2d");
 
 let sums = [{n:0, s:0}];
@@ -110,7 +108,7 @@ function draw(timestamp) {
 
     // draw the current state
     let table_bitmap = table.transferToImageBitmap();
-    f_table2d_pre.transferFromImageBitmap(table_bitmap);
+    f_table_pre.transferFromImageBitmap(table_bitmap);
     
     // report n
     if (timestamp > last_report_timestamp + 2000) {
