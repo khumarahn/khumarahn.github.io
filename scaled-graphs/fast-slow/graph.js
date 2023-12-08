@@ -10,13 +10,7 @@ function set_defaults() {
     let s0 = document.getElementById("s0");
     let n = document.getElementById("n");
     let pvar_p =  document.getElementById("pvar_p");
-    if (sel == "SLSV:Levy") {
-        f.value = "SLSV(x, 0.6)";
-        x.value = "0.2";
-        s0.value = "{x: 1.0, y: 0.0}";
-        o.value = "{x: s.x - eps * 4 * s.y * (x-0.5), y: s.y + eps * 4 * s.x * (x-0.5)}";
-        c.value = "Math.pow(n, -0.6)";
-    } else if (sel == "CUSP:CKM23") {
+    if (sel == "CUSP:CKM:f") {
         f.value = "CUSP(x, 1/3, 3)";
         x.value = "{x: 0.5, y: 0.0, theta: 0.23, phi: 0}";
         s0.value = "{x: 0.0, y: 0.0}";
@@ -24,6 +18,30 @@ function set_defaults() {
         c.value = "Math.pow(n, -2/3)";
         n.value = "5000";
         pvar_p.value = "3/2 + 1/4";
+    } else if (sel == "CUSP:CKM:s") {
+        f.value = "CUSP(x, 1/3, 3)";
+        x.value = "{x: 0.5, y: 0.0, theta: 0.23, phi: 0}";
+        s0.value = "{x: 0.0, y: 0.0}";
+        o.value = "{x: s.x + eps * 5 * Math.cos(10 * s.y) * Math.cos(3*x.phi), y: s.y + eps * Math.sin(10*s.x) * Math.cos(5*x.phi)}";
+        c.value = "Math.pow(n, -2/3)";
+        n.value = "20000";
+        pvar_p.value = "3/2 + 1/4";
+    } else if (sel == "SLSV:CKM:f") {
+        f.value = "SLSV(x, 0.75)";
+        x.value = "0.2";
+        s0.value = "{x: 0.0, y: 0.0}";
+        o.value = "{x: s.x + eps * Math.cos(Math.PI*x), y: s.y + eps * 4 * (Math.sin(Math.PI*x) - 0.3770612634117)}";
+        c.value = "Math.pow(n, -0.75)";
+        n.value = "20000";
+        pvar_p.value = "1.75";
+    } else if (sel == "SLSV:CKM:s") {
+        f.value = "SLSV(x, 0.75)";
+        x.value = "0.2";
+        s0.value = "{x: 1.0, y: 0.0}";
+        o.value = "{x: s.x + eps * Math.sqrt(1 + s.x*s.x * s.y*s.y) * Math.cos(6*s.y) * Math.cos(Math.PI*x), y: s.y + eps * Math.sqrt(1 + s.x*s.x * s.y*s.y) * Math.cos(6*s.x) * 4 * (Math.sin(Math.PI*x) - 0.3770612634117)}";
+        c.value = "Math.pow(n, -0.75)";
+        n.value = "20000";
+        pvar_p.value = "1.75";
     }
 }
 
@@ -361,6 +379,27 @@ function form_click() {
         'quadratic variation: ' + variation.qvar.toFixed(4);
 
 }
+
+
+function getJsonFromUrl(url) {
+    if(!url) url = location.search;
+    var query = url.substr(1);
+    var result = {};
+    query.split("&").forEach(function(part) {
+        var item = part.split("=");
+        result[item[0]] = decodeURIComponent(item[1]);
+    });
+    return result;
+}
+
+{
+    let preset = getJsonFromUrl().preset;
+    if (preset !== undefined) {
+        document.getElementById("preset").value = preset;
+    }
+}
+
+set_defaults();
 
 init_plot();
 form_click();

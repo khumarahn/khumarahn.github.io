@@ -113,8 +113,10 @@ body {
            </td>
            <td>
              <select id="preset" onchange="set_defaults()" onfocus="this.selectedIndex = 0;">
-               <option value="CUSP:CKM23">Billiard with flat cusp</option>
-               <option value="SLSV:Levy">Symmetric LSV, Lévy process</option>
+               <option value="SLSV:CKM:f">Symmetric LSV (fast process)</option>
+               <option value="SLSV:CKM:s">Symmetric LSV (slow process)</option>
+               <option value="CUSP:CKM:f">Billiard with flat cusp (fast process)</option>
+               <option value="CUSP:CKM:s">Billiard with flat cusp (slow process)</option>
              </select>
            </td>
          </tr>
@@ -172,11 +174,11 @@ body {
     <p style="font-size:80%">
       We use <code>hammer.js</code> and <code>Chart.js</code>.
     </p>
-    <script language="javascript" type="text/javascript" src="../hammer.min.js"></script>
-    <script language="javascript" type="text/javascript" src="../Chart.min.js"></script>
-    <script language="javascript" type="text/javascript" src="../chartjs-plugin-zoom.min.js"></script>
-    <script language="javascript" type="text/javascript" src="../../cusp/jz-cusp.js"></script>
-    <script language="javascript" type="text/javascript" src="../p_var.js"></script>
-    <script language="javascript" type="text/javascript" src="graph.js"></script>
+    <script src="../hammer.min.js"></script>
+    <script src="../Chart.min.js"></script>
+    <script src="../chartjs-plugin-zoom.min.js"></script>
+    <script src="../../cusp/jz-cusp.js"></script>
+    <script src="../p_var.js"></script>
+    <script src="graph.js"></script>
   </body>
 </html>
