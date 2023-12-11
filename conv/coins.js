@@ -20,6 +20,17 @@ let sums_N = 1;
 let ND = 256;
 let maxT = 7/32;
 
+window.onresize = resize;
+
+function resize() {
+    W = document.body.clientWidth - 10;
+    H = Math.min(W*9/16, document.body.clientHeight);
+    f_table.width = W;
+    f_table.height = H;
+    table.width = W;
+    table.height = H;
+}
+
 function randn_bm(sigma2) {
         let u = 0, v = 0;
         while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
@@ -186,4 +197,5 @@ function draw(timestamp) {
     }
 }
 
+resize();
 draw(0);
