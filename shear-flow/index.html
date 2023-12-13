@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shear flow animation</title>
+    <style type="text/css">
+body {
+  margin: auto;
+  max-width: 1050px;
+}
+    </style>
+    <script language="javascript" type="text/javascript" async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/latest.js?config=TeX-MML-AM_CHTML">
+    </script>
+    </head>
+    <body>
+        <table>
+            <tr>
+                <th style="width:512px">Simulation</th>
+                <th style="width:512px">Observations</th>
+            </tr>
+            <tr>
+                <td >
+                    <div>
+                        <canvas id="table" height="256" width="512"></canvas>
+                    </div>
+                    <div>
+                        <input id="animateCheckbox" type="checkbox" checked> Animation enabled
+                    </div>
+
+                    <div id="zNValue"></div>
+                    <div>
+                        <input id="zNSlider" style="width:512px" type="range" min="0" max="18" value="4" class="slider">
+                    </div>
+
+                    <div id="rValue"></div>
+                    <div>
+                        <input id="rSlider" style="width:512px" type="range" min="1" max="80" value="10" class="slider">
+                    </div>
+
+                    <div id="speedValue"></div>
+                    <div>
+                        <input id="speedSlider" style="width:512px" type="range" min="0" max="512" value="196" class="slider">
+                    </div>
+
+                    <div>
+                        Top wall collision rule: 
+                        <select id="topColRuleSelect">
+                            <option value="a">a</option>
+                            <option value="b" selected="selected">b</option>
+                            <option value="c">c</option>
+                            <option value="d">d</option>
+                            <option value="s">s</option>
+                            <option value="m">m</option>
+                            <option value="n">n</option>
+                        </select>
+                    </div>
+
+                    <div id="topWallAlphaDiv">
+                        <span id="topWallAlphaSpan">α</span><br />
+                        <input id="topWallAlphaSlider" style="width:512px" type="range" min="-256" max="256" value="-176" class="slider">
+                    </div>
+                    <div id="topWallBetaDiv">
+                        <span id="topWallBetaSpan">beta</span><br />
+                        <input id="topWallBetaSlider" style="width:512px" type="range" min="-256" max="256" value="-176" class="slider">
+                    </div>
+                    <div>
+                        Bottom wall collision rule: 
+                        <select id="botColRuleSelect">
+                            <option value="-" selected="selected">same as top</option>
+                            <option value="a">a</option>
+                            <option value="b">b</option>
+                            <option value="c">c</option>
+                            <option value="d">d</option>
+                            <option value="s">s</option>
+                            <option value="m">m</option>
+                            <option value="n">n</option>
+                        </select>
+                    </div>
+
+                    <div id="botWallAlphaDiv">
+                        <span id="botWallAlphaSpan">alpha</span><br />
+                        <input id="botWallAlphaSlider" style="width:512px" type="range" min="-256" max="256" value="-176" class="slider">
+                    </div>
+                    <div id="botWallBetaDiv">
+                        <span id="botWallBetaSpan">beta</span><br />
+                        <input id="botWallBetaSlider" style="width:512px" type="range" min="-256" max="256" value="-176" class="slider">
+                    </div>
+
+                    <div>
+                        Gravity: 
+                        <select id="gravitySelect">
+                            <option value="off" selected="selected">off</option>
+                            <option value="on">on</option>
+                        </select>
+                        <span id="gravitySpan">value</span><br />
+                    </div>
+                    <div id="gravityDiv">
+                        X:
+                        <br>
+                        <input id="gravityXSlider" style="width:512px" type="range" min="-256" max="256" value="0" class="slider">
+                        <br>
+                        Y:
+                        <br>
+                        <input id="gravityYSlider" style="width:512px" type="range" min="-256" max="256" value="0" class="slider">
+                    </div>
+                </td>
+                <td>
+                    <canvas id="graph" height="384px" width="512px"></canvas>
+                    <div>
+                        <span id="averagePointsSpan">0</span><br />
+                        <input id="averagePointsSlider" style="width:512px" type="range" min="0" max="18" value="14" class="slider">
+                    </div>
+                    <div>
+                        <button onclick="downloadObservations()">Download statistics for R</button> 
+                        <button onclick="resetObservations()">Reset observations</button> 
+                    </div>
+                    <div id="observationsDiv"></div>
+                </td>
+            </tr>
+        </table>
+        
+        <h4>Model</h4>
+        <p>
+            This is work in progress.
+        </p>
+        <p>
+            We model planar gas of hard spheres in a strip between two walls. The particles move straight and
+            collide with each other as usual, but collisions with the walls are controlled by Maxwell demons
+            which follow specific rules. This induces a non-equilibrium steady state, e.g. a shear flow.
+        </p>
+        <p>
+            We look into how the collision rules relate to the thermodynamic entropy production.
+            On the graph, the table is divided into a number of horizontal strips, and vertical axis
+            is the y-coordinate of the strip.
+            In each strip, we compute various averages. Say, VX is the average of the x component of velocity,
+            while TX and TY are covariances of x and y components of the velocity respectively, measuring
+            temperatures in the strips.
+        </p>
+    
+    <h4>Wall collision rules</h4>
+    <p>
+    As in <a href="http://ams.rice.edu/mathscinet-getitem?mr=98j:82036">Chernov-Lebowitz (1997)</a>,
+        we measure the collision angles with respect
+        to \(x\) axis, positive at the top wall and negative at the bottom wall.
+        We denote the incoming angle by \(\varphi\) and the outgoing angle by \(\psi\).
+        Both are in \((0, \pi)\), and in case of specular reflection, \(\psi = \varphi\).
+    </p>
+    <p>
+        <ul>
+            <li><b>a-rule:</b>
+                with a parameter \(\alpha \in (0, \pi)\),
+                \[
+                    \psi = \begin{cases}
+                        \varphi, & \varphi \in (0, \alpha], \\\\
+                        \frac{\pi - \varphi}{\pi - \alpha} \alpha, & \varphi \in (\alpha, \pi).
+                    \end{cases}
+                \]
+            <li><b>b-rule:</b>
+                with a parameter \(b &gt; 0\),
+                \[
+                    \psi = (\pi + b) - [(\pi + b)^2 - \varphi(\varphi + 2b)]^{1/2} .
+                \]
+            </li>
+            <li><b>c-rule:</b>
+                with a parameter \(c \in (0,1]\),
+                \[
+                    \psi = c \varphi .
+                \]
+            </li>
+            <li><b>d-rule:</b> As suggested by David Huse, the outgoing angle is always \(\alpha\), 
+                where \(\alpha \in (0, \pi)\) is a parameter
+            </li>
+            <li><b>m-rule:</b> Maxwellian rule: incoming velocity \((v_x^-, v_y^-)\) is ignored,
+                and outgoing velocity has distribution with density
+                \[
+                    \rho(v_x^+, v_y^+)
+                    = (2 \pi T_w^3)^{-1/2} v_y^+ \exp \Bigl( - \frac{(v_x^+ - \alpha)^2 + (v_y^+)^2}{2 T_w} \Bigr)
+                    .
+                \]
+                Here \(\alpha\) and \(T_w\) are the drift and temperature parameters.
+            </li>
+            <li><b>n-rule:</b>
+                At each wall,
+                if the incoming velocity is \((v_x^-, v_y^-)\), then the outgoing velocity \((v_x^+, v_y^+)\)
+                has the same magnitude and
+                \[
+                \frac{v_x^+}{v_y^+} = - \frac{v_x^-}{v_y^-} + \mathcal{N}(\text{bias}, 1)
+                ,
+                \]
+                where \(\text{bias}\) is adjustable above, and \(\mathcal{N}\) is the normal
+                random variable.
+
+                When \(\text{bias}\) is positive, the bottom wall naturally pushes particles to the right,
+                and the top wall to the left.
+            </li>
+            <li><b>s-rule:</b> specular reflection, \(\psi = \varphi\)</li>
+        </ul>
+    </p>
+    
+    <script language="javascript" type="text/javascript" src="download.js"></script>
+    <script language="javascript" type="text/javascript" src="Chart.min.js"></script>
+    <script language="javascript" type="text/javascript" src="shear.js"></script>
+    <script language="javascript" type="text/javascript" src="20.js"></script>
+  </body>
+</html>
