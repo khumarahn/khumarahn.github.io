@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Zoom into Brownian motion</title>
+    <style type="text/css">
+body {
+  margin: auto;
+  max-width: 512px;
+}
+    </style>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  </head>
+  <body>
+    <p>
+        We take a single trajectory \(W(t)\) of the standard two-dimensional Brownian motion,
+        a parameter \(a &gt; 0\) and plot 
+        \[ \sqrt{a} W\Bigl(\frac{t}{a}\Bigr), \; 0 \leq t \leq 1. \]
+    </p>
+    <div>
+      <canvas id="table" height=512px width=512px></canvas>
+    </div>
+    <p>
+        Then we send \(a \to \infty\) exponentially fast and animate the plot.
+    </p>
+    <script language="javascript" type="text/javascript" src="zoom.js"></script>
+  </body>
+</html>
