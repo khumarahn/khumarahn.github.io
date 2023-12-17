@@ -1,37 +1,49 @@
 "use strict";
 
+let module_init_done = false;
 var Module = {
-    'onRuntimeInitialized': init
+    'onRuntimeInitialized': function() {
+        module_init_done = true;
+        run_orders();
+    }
 };   
 importScripts('32.js');
 
-var bo; // billiard orbit
-let orbit = [{x: 0, y: 0}];
-let orbit_T = 0;
-let run_time = 0;
-let max_orbit = 128*1024;
-let init_complete = 0;
 
-function init() {
-    bo = new Module.orbit_c();
-    init_complete = 1;
-}
+var bo; // billiard orbit
+let table = -1; // table variant, negative is nothing
+
+let orders = [];
+let orders_running = true;
 
 onmessage = function(e) {
-    postMessage({orbit: orbit, T: orbit_T, run_time: run_time});
-    if (init_complete) {
-        reOrbit(e.data.dt);
+    orders.push(e.data);
+    //console.log("onmessage", orders.length,JSON.stringify(orders));
+    if (module_init_done) {
+        run_orders();
     }
 }
 
-function reOrbit(dt) {
-    let t = Date.now();
-    bo.step(dt);
-    orbit.length = 0;
-    // <= size() because the extra point is the current position
-    for (let i=0; i<=bo.size(); i++) {
-        orbit.push({x: bo.xy(i).x, y: bo.xy(i).y});
+function run_orders() {
+    for (let o of orders) {
+        if ("table" in o) {
+            table = o.table;
+            bo = new Module.orbit_c(table);
+        }
+        if (table >= 0 && "dt" in o) {
+            let start_time = Date.now();
+            bo.step(o.dt);
+            let orbit = [];
+            // <= size() because the extra point is the current position
+            for (let i=0; i<=bo.size(); i++) {
+                orbit.push({x: bo.xy(i).x, y: bo.xy(i).y});
+            }
+            postMessage({
+                orbit: orbit,
+                T: bo.T(),
+                run_time: Date.now() - start_time
+            });
+        }
     }
-    orbit_T = bo.T();
-    run_time = Date.now() - t;
+    orders = [];
 }
