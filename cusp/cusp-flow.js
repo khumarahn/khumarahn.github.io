@@ -1,6 +1,6 @@
 "use strict";
 
-let configChanged = false;
+let configChanged = true;
 
 let speed;
 let speedSlider = document.getElementById("speedSlider");
@@ -37,18 +37,18 @@ let table_bg2d = table_bg.getContext("2d", { willReadFrequently: true });
 let table_bg2d_image = table_bg2d.getImageData(0,0,W,H);
 
 let R = 5;
-let p_canvas = document.createElement('canvas');
-let p_canvas2d = p_canvas.getContext("2d");
+let p_canvas_image = new Image();
 {
+    let p_canvas = document.createElement('canvas');
+    let p_canvas2d = p_canvas.getContext("2d");
     p_canvas2d.fillStyle = 'rgba(200,0,0,0.8)';
     p_canvas2d.clearRect(0,0, 2*R + 1, 2*R + 1);
     p_canvas2d.beginPath();
     p_canvas2d.arc(R, R, R, 0, Math.PI*2);
     p_canvas2d.closePath();
     p_canvas2d.fill();
+    p_canvas_image.src = p_canvas.toDataURL();
 }
-let p_canvas_image = new Image();
-p_canvas_image.src = p_canvas.toDataURL();
 
 let p = {
     x: 0.5, 
@@ -89,11 +89,6 @@ function drawTable() {
 }
 
 function drawParticles(timestamp) {
-
-    // draw the current state
-    f_table_pre.transferFromImageBitmap(table_bitmap);
-
-    // prepare the next
     if (configChanged) {
         drawTable();
         
@@ -103,16 +98,37 @@ function drawParticles(timestamp) {
         }
 
         configChanged = false;
-    }
-    
-    p = CUSPt(p, alpha, beta, speed / 32);
-    
-    table2d.putImageData(table_bg2d_image, 0, 0);
-    table2d.drawImage(p_canvas_image, tx(p.x) - R, ty(p.y) - R);
+    } else {
+        // draw the current state
+        f_table_pre.transferFromImageBitmap(table_bitmap);
 
-    table_bitmap = table.transferToImageBitmap();
+        // prepare the next
+        p = CUSPt(p, alpha, beta, speed / 32);
+
+        table2d.putImageData(table_bg2d_image, 0, 0);
+        table2d.drawImage(p_canvas_image, tx(p.x) - R, ty(p.y) - R);
+
+        table_bitmap = table.transferToImageBitmap();
+    }
 
     requestAnimationFrame(drawParticles);
 }
+
+window.onresize = resize;
+
+function resize() {
+    W = Math.min(document.body.clientWidth, document.body.clientHeight) - 10;
+    H = W;
+    f_table.width = W;
+    f_table.height = H;
+    table.width = W;
+    table.height = H;
+    table_bg.width = W;
+    table_bg.height = H;
+
+    configChanged = true;
+}
+
+resize();
 
 drawParticles(0);
