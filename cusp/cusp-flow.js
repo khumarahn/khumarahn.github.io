@@ -55,7 +55,9 @@ let p = {
     y: 0.0, 
     theta: 3 * Math.PI / 4
 };
-    
+
+let timestamp_prev = 0;
+
 function tx(x) {
     return x * (W - 15);
 }
@@ -89,6 +91,9 @@ function drawTable() {
 }
 
 function drawParticles(timestamp) {
+    let dt = timestamp - timestamp_prev;
+    timestamp_prev = timestamp;
+
     if (configChanged) {
         drawTable();
         
@@ -103,7 +108,7 @@ function drawParticles(timestamp) {
         f_table_pre.transferFromImageBitmap(table_bitmap);
 
         // prepare the next
-        p = CUSPt(p, alpha, beta, speed / 32);
+        p = CUSPt(p, alpha, beta, speed * dt / 1024);
 
         table2d.putImageData(table_bg2d_image, 0, 0);
         table2d.drawImage(p_canvas_image, tx(p.x) - R, ty(p.y) - R);
