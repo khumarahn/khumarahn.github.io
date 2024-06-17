@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        
+        <p>Computing by loyalty and dedication<span id="progress"></span></p>
+        <div id="pi"></div> 
+        
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        
+        <script>
+            let worker = new Worker("9-threads-worker.js");
+
+            worker.postMessage({
+                iterations: 200 * 1000 * 1000
+            });
+
+            worker.onmessage = function(event){
+                // get worker's message
+                let message = event.data;
+
+                // write latex
+                document.getElementById("pi").innerHTML = 
+                    "\\[ \\pi \\approx " + message.pi.toFixed(14)
+                    + " = \\frac{ " + message.inside.toFixed() + "}{" + message.all.toFixed() + "} \\]";
+                MathJax.typeset();
+                
+                // send next request
+                worker.postMessage({
+                    iterations: 200 * 1000 * 1000
+                });
+                
+                // reset progress bar
+                document.getElementById("progress").innerHTML = "";
+            };
+
+            // animate progress
+            setInterval(function () {
+                document.getElementById("progress").innerHTML += ".";
+            }, 500); 
+        </script>
+    </body>
+</html> 

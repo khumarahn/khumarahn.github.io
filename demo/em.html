@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+    </head>
+    <body>
+        <div id="demo">test</div>
+        <button onclick="do_something();">Try me!</button>
+
+        <!-- load compiled c++ code, this creates the object "Module" -->
+        <script src="em.js"></script>
+        
+        <script>
+            function do_something() {
+                // random power
+                let p = Math.random() * 48 - 24;
+
+                // get result from c++
+                m = Module.do_something_mad(p);
+
+                // write the result in latex
+                document.getElementById("demo").innerHTML =
+                    `\\[ 
+                        \\begin{pmatrix}
+                            2 & 1 \\\\
+                            1 & 1
+                        \\end{pmatrix}^{` + p.toFixed(2) + "} = " +
+                    "\\begin{pmatrix} " +
+                    m.get(0).toFixed(2) + " & " + m.get(1).toFixed(2) + " \\\\ " +
+                    m.get(2).toFixed(2) + " & " + m.get(3).toFixed(2) +
+                    " \\end{pmatrix} \\]";
+
+                MathJax.typeset();
+            }
+        </script>
+        
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </body>
+</html>

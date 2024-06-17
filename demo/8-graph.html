@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <div id="demo"></div>
+        <p>
+            \[
+                T \colon x \mapsto \begin{cases}
+                    x (1 + 2^\gamma x^\gamma)  &amp; x &lt; 1/2 \\
+                    2 x - 1                    &amp; \text{else}
+                \end{cases}
+            \]
+        </p>
+
+        <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+        
+        <script>
+            function LSV(x) {
+                return x * (1 + Math.pow(2 * x, 0.75));
+            }
+            
+            var graph = {
+                x: [],
+                y: []
+            };
+
+            // first branch
+            for (let x = 0; x <= 0.5; x += 0.5 / 16) {
+                graph.x.push(x);
+                graph.y.push(LSV(x));
+            }
+
+            //second branch
+            graph.x.push(NaN, 0.5, 1.0);
+            graph.y.push(NaN, 0.0, 1.0);
+
+            Plotly.newPlot("demo", [graph]);
+        </script>
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </body>
+</html> 

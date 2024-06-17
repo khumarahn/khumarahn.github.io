@@ -1,62 +1,20 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <script src='https://cdn.plot.ly/plotly-2.32.0.min.js'></script>
-        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-        <style>
-        body {
-            margin: auto;
-            max-width: 64em;
-        }
-        </style>
-    </head>
-
     <body>
-        <h3>Intermittent map</h3>
-        <div>
-            Consider the standard Liverani-Saussol-Vaienti map \(T \colon [0,1] \to [0,1]\) with parameter \(\alpha &gt; 0\):
-            \[
-                T \colon x \mapsto 
-                \begin{cases}
-                    x (1 + 2^{1 / \alpha} x^{1 / \alpha}), &amp; x < 0.5 \\
-                    2 (x - 1), &amp; x > 0.5
-                \end{cases}
-            \]
-        </div>
-        <div id='lsv'></div>
-        <div style="width: 75%;margin: auto;">
-            \(\alpha\): <span id="alphaValue"></span>
-            <br>
-            <input id="alphaSlider" style="width:100%" type="range" min="1" max="128" value="48"
-            class="slider" oninput="alphaChange();">
-        </div>
-        
-        <h3>Iterates of the transfer operator</h3>
-        Let \(L\) be the transfer operator with respect to the Lebesgue measure:
-        \[
-            (L v)(x) = \sum_{y \in T^{-1} x} \frac{v(y)}{T'(y)}
-        \]
-        We are interested in the iterates \(L^n v\) for functions \(v\) with \(\|v - 1\|_{C^1}\) small.
-        Choose such a \(v\) and use a simple and innefficient algorithm to plot \(L^n v\):  
-        <div id='Ln'></div>
-        <div style="width:75%;margin:auto;margin-bottom:1em">
-            \(v(x)\): <input type="text" id="v" size="75%" value="1 + 0.05 * Math.sin(6*Math.PI*x)" />
-            <input type="button" onclick="alphaChange();" value="Set" />
-        </div>
-        <div>
-            This computation is most inefficient, and we cannot compute much more than 10 iterates, but
-            it gives an idea.
-        </div>
-        <div>
-            We would like to prove that \(L^n v\) is monotone on \([1/2,1]\) in the sense that
-            \[
-                (L^{n+1}v)(x) \leq (L^n v)(x)
-                \quad \text{for all } n \geq 0 \text{ and } x \in [1/2,1]
-            \]
-            But how?
-        </div>
-        <script src="lsv.js"></script>
-        <script src="graph.js"></script>
+        <p>Hello</p>
+        <ul>
+            <li><a href="0-html.html">0-html.html</a></li>
+            <li><a href="1-js.html">1-js.html</a></li>
+            <li><a href="2-button.html">2-button.html</a></li>
+            <li><a href="3-latex.html">3-latex.html</a></li>
+            <li><a href="4-canvas.html">4-canvas.html</a></li>
+            <li><a href="5-motion.html">5-motion.html</a></li>
+            <li><a href="6-motion-ai.html">6-motion-ai.html</a></li>
+            <li><a href="7-plot.html">7-plot.html</a></li>
+            <li><a href="8-graph.html">8-graph.html</a></li>
+            <li><a href="9-threads.html">9-threads.html</a></li>
+            <li><a href="em.html">em.html</a></li>
+            <li><a href="lsv.html">lsv.html</a></li>
+        </ul>
     </body>
 </html>

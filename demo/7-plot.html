@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <div id="demo"></div>
+
+        <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+        
+        <script>
+            var graph = {
+                x: [0.0, 0.5, NaN, 0.5, 1.0],
+                y: [0.0, 1.0, NaN, 0.0, 1.0]
+            };
+
+            Plotly.newPlot("demo", [graph]);
+        </script>
+    </body>
+</html> 

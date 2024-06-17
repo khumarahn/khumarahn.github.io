@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sinai Billiard Animation</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="billiardCanvas" width="600" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('billiardCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const width = canvas.width;
+        const height = canvas.height;
+        const radius = 50; // Radius of the central circular obstacle
+
+        let ball = {
+            x: 100,
+            y: 100,
+            radius: 5,
+            vx: 2,
+            vy: 3
+        };
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw the central circular obstacle
+            ctx.beginPath();
+            ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'black';
+            ctx.fill();
+
+            // Draw the ball
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+        }
+
+        function update() {
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // Check for collisions with the walls
+            if (ball.x - ball.radius < 0 || ball.x + ball.radius > width) {
+                ball.vx = -ball.vx;
+            }
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > height) {
+                ball.vy = -ball.vy;
+            }
+
+            // Check for collision with the central circular obstacle
+            const dx = ball.x - width / 2;
+            const dy = ball.y - height / 2;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < radius + ball.radius) {
+                // Reflect the ball's velocity
+                const angle = Math.atan2(dy, dx);
+                ball.vx = -ball.vx + Math.cos(angle);
+                ball.vy = -ball.vy + Math.sin(angle);
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
