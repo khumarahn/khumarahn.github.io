@@ -5,7 +5,6 @@
         <p>Computing by loyalty and dedication<span id="progress"></span></p>
         <div id="pi"></div> 
         
-        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script id="MathJax-script" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
         
         <script>
@@ -22,7 +21,7 @@
                 // write latex
                 document.getElementById("pi").innerHTML = 
                     "\\[ \\pi \\approx " + message.pi.toFixed(14)
-                    + " = \\frac{ " + message.inside.toFixed() + "}{" + message.all.toFixed() + "} \\]";
+                    + " = 4 \\cdot \\frac{ " + message.inside.toFixed() + "}{" + message.all.toFixed() + "} \\]";
                 MathJax.typeset();
                 
                 // send next request
