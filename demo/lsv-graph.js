@@ -1,7 +1,9 @@
+"use strict";
+
 let alpha = 0.75;
 
 function lsv_trace() {
-    trace = {
+    let trace = {
         x: [],
         y: [],
         type: 'scatter'
@@ -25,10 +27,14 @@ function alphaChange() {
     alpha = document.getElementById("alphaSlider").value / 64;
     document.getElementById("alphaValue").innerHTML = alpha.toFixed(4);
     Plotly.newPlot('lsv', [lsv_trace()]);
-    
+
     let v = new Function('x', 'return ' + document.getElementById("v").value);
 
     Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0.0, 2.0]}, xaxis: {dtick: 0.125}});
+
+    Plotly.newPlot('hn', compute_h(14), { yaxis: {range: [-8.0, 8.0]}, xaxis: {dtick: 0.125}});
+
+    Plotly.newPlot('ccc', three_conditions(14), { yaxis: {range: [-1.0, 8.0]}, xaxis: {dtick: 0.125}});
 }
 
 function computeLv(v, n) {
@@ -41,13 +47,109 @@ function computeLv(v, n) {
             name: 'L^'+k.toString()+' v',
             visible: 'legendonly'
         };
-        for (x=0.0; x <=1.0; x+=1./128) {
+        for (let x = 0.0; x <= 1.0; x += 1./128) {
             trace.x.push(x);
-            trace.y.push(LSV_Ln(v, x, alpha, k));
+            trace.y.push(LSV_Ln(v, x, alpha, k)); // / LSV_Ln(v, x, alpha, 12));
         }
         traces.push(trace);
     }
     return traces;
+}
+
+function compute_h(N) {
+    function vvv(x) {
+        return [1, 0, 0];
+    }
+    let h = {
+        x: [],
+        y: [],
+        name: 'L^' + N.toString() + ' 1'
+    };
+    let hp = {
+        x: [],
+        y: [],
+        name: '(L^' + N.toString() + " 1)'"
+    };
+    let hpp = {
+        x: [],
+        y: [],
+        name: '(L^' + N.toString() + " 1)''"
+    };
+    for (let x = 0.0; x <= 1.0; x += 1./128) {
+        let g = LSV_Ln_pp(vvv, x, alpha, N);
+        h.x.push(x);
+        h.y.push(g[0]);
+
+        hp.x.push(x);
+        hp.y.push(g[1]);
+
+        hpp.x.push(x);
+        hpp.y.push(g[2]);
+    }
+    return [h, hp, hpp];
+}
+
+function three_conditions(N) {
+    function vvv(x) {
+        return [1, 0, 0];
+    }
+    function h(x) {
+        return LSV_Ln_pp(vvv, x, alpha, N);
+    }
+    function COND(x) {
+        let y1 = LSV_left_i(x, alpha),
+            y2 = LSV_right_i(x, alpha),
+            h1 = h(y1),
+            h2 = h(y2),
+            w1 = LSV_left_w(y1, alpha),
+            w2 = LSV_right_w(y2, alpha),
+            wp1 = LSV_left_wp(y1, alpha),
+            wp2 = LSV_right_wp(y2, alpha),
+            wpp1 = LSV_left_wpp(y1, alpha),
+            wpp2 = LSV_right_wpp(y2, alpha);
+
+        let A = h1[1] / h1[0] * w1 + wp1 - (h2[1] / h2[0] * w2 + wp2);
+
+        let B = h1[2] / h1[0] * w1 * w1 + 3 * h1[1] / h1[0] * wp1 * w1 + wpp1 * w1 + wp1 * wp1 -
+            (   h2[2] / h2[0] * w2 * w2 + 3 * h2[1] / h2[0] * wp2 * w2 + wpp2 * w2 + wp2 * wp2 );
+
+        let C = y1 / (1 + h2[0] * w2 / (h1[0] * w1))  +  y2 / (1 + h1[0] * w1 / (h2[0] * w2));
+        C = x - C;
+
+        return [-A, B, C];
+    }
+
+    let c1 = {
+        x: [],
+        y: [],
+        name: 'C1'
+    };
+    let c2 = {
+        x: [],
+        y: [],
+        name: 'C2'
+    };
+    let c3 = {
+        x: [],
+        y: [],
+        name: 'C3'
+    };
+
+    for (let x = 0.0; x <= 1.0; x += 1./128) {
+        let c = COND(x);
+
+        c1.x.push(x);
+        c1.y.push(c[0]);
+
+        c2.x.push(x);
+        c2.y.push(c[1]);
+
+        if (x >= 0.5) {
+            c3.x.push(x);
+            c3.y.push(c[2]);
+        }
+    }
+    return [c1, c2, c3];
 }
 
 alphaChange();

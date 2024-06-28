@@ -2,7 +2,6 @@
 <html>
     <head>
         <script src='https://cdn.plot.ly/plotly-2.32.0.min.js'></script>
-        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
         <style>
         body {
@@ -17,10 +16,10 @@
         <div>
             Consider the standard Liverani-Saussol-Vaienti map \(T \colon [0,1] \to [0,1]\) with parameter \(\alpha &gt; 0\):
             \[
-                T \colon x \mapsto 
+                T \colon x \mapsto
                 \begin{cases}
-                    x (1 + 2^{1 / \alpha} x^{1 / \alpha}), &amp; x < 0.5 \\
-                    2 (x - 1), &amp; x > 0.5
+                    x (1 + 2^{1 / \alpha} x^{1 / \alpha}), &amp; x &lt; 0.5 \\
+                    2 (x - 1), &amp; x &gt; 0.5
                 \end{cases}
             \]
         </div>
@@ -29,16 +28,16 @@
             \(\alpha\): <span id="alphaValue"></span>
             <br>
             <input id="alphaSlider" style="width:100%" type="range" min="1" max="128" value="48"
-            class="slider" oninput="alphaChange();">
+            class="slider" onchange="alphaChange();">
         </div>
-        
+
         <h3>Iterates of the transfer operator</h3>
         Let \(L\) be the transfer operator with respect to the Lebesgue measure:
         \[
             (L v)(x) = \sum_{y \in T^{-1} x} \frac{v(y)}{T'(y)}
         \]
         We are interested in the iterates \(L^n v\) for functions \(v\) with \(\|v - 1\|_{C^1}\) small.
-        Choose such a \(v\) and use a simple and innefficient algorithm to plot \(L^n v\):  
+        Choose such a \(v\) and use a simple and innefficient algorithm to plot \(L^n v\):
         <div id='Ln'></div>
         <div style="width:75%;margin:auto;margin-bottom:1em">
             \(v(x)\): <input type="text" id="v" size="75%" value="1 + 0.05 * Math.sin(6*Math.PI*x)" />
@@ -56,6 +55,51 @@
             \]
             But how?
         </div>
+
+
+        <h3>Density and derivatives</h3>
+        <div>
+            Here we plot \(L^n 1\) with its first two derivatives as an approximation of the invariant density.
+        </div>
+        <div id='hn'></div>
+
+        <h3>Three conditions</h3>
+        <div> Let \(h\) denote the density of the invariant measure and let \(w = 1 / T'\).
+            For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of \(x\) under \(T\).
+            Suppose that for each \(x\):
+            \[
+                \Bigl[ \frac{h'}{h} w + w' \Bigr](y_1)
+                \leq \Bigl[ \frac{h'}{h} w + w' \Bigr](y_2)
+                \tag{C1}
+            \]
+            and
+            \[
+                \Bigl[ \frac{h''}{h} w^2 + 3 \frac{h'}{h} w' w + w'' w + (w')^2 \Bigr](y_1)
+                \geq \Bigl[ \frac{h''}{h} w^2 + 3 \frac{h'}{h} w' w + w'' w + (w')^2 \Bigr](y_2)
+                .
+                \tag{C2}
+            \]
+            Suppose also that for \(x\) on the second branch,
+            \[
+                x \geq \frac{y_1}{1 + \frac{h(y_2) w(y_2)}{h(y_1) w(y_1)}}
+                + \frac{y_2}{1 + \frac{h(y_1) w(y_1)}{h(y_2) w(y_2)}}
+                .
+                \tag{C3}
+            \]
+        </div>
+        <div>
+            If the three conditions above are satisfied, then there is an argument (which has to be checked!) that
+            the cone of positive functions satisfying \(\frac{v'}{v} \geq \frac{h'}{h}\)
+            and \(\frac{v''}{v} \leq \frac{h''}{h}\) is invariant under iterations of \(L\), and that \( (L v)(x) \leq v(x) \)
+            for all such \(v\) and \(x \in [1/2,1]\).
+        </div>
+        <div>
+            It is not clear however how to verify these conditions. But we can compute an approximation for \(h\) and plot some graphs.
+            Below C1, C2 and C3 are the the differences of the two sides in corresponding conditions, taken so that positive values
+            mean that the condition holds.
+        </div>
+        <div id='ccc'></div>
+
         <script src="lsv.js"></script>
         <script src="lsv-graph.js"></script>
     </body>
