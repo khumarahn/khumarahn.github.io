@@ -32,7 +32,9 @@ function alphaChange() {
 
     Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0.0, 2.0]}, xaxis: {dtick: 0.125}});
 
-    Plotly.newPlot('hn', compute_h(14), { yaxis: {range: [-8.0, 8.0]}, xaxis: {dtick: 0.125}});
+    let h = compute_h(14);
+    Plotly.newPlot('hn', h[0], { yaxis: {range: [-8.0, 8.0]}, xaxis: {dtick: 0.125}});
+    Plotly.newPlot('hph', h[1], { yaxis: {range: [0, 4.0]}, xaxis: {dtick: 0.125}});
 
     Plotly.newPlot('ccc', three_conditions(14), { yaxis: {range: [-1.0, 8.0]}, xaxis: {dtick: 0.125}});
 }
@@ -60,20 +62,31 @@ function compute_h(N) {
     function vvv(x) {
         return [1, 0, 0];
     }
+    let s = 'L^' + N.toString() + ' 1';
     let h = {
         x: [],
         y: [],
-        name: 'L^' + N.toString() + ' 1'
+        name: s
     };
     let hp = {
         x: [],
         y: [],
-        name: '(L^' + N.toString() + " 1)'"
+        name: '(' + s + ")'"
     };
     let hpp = {
         x: [],
         y: [],
-        name: '(L^' + N.toString() + " 1)''"
+        name: '(' + s + ")''"
+    };
+    let hph = {
+        x: [],
+        y: [],
+        name: '- x (' + s + ")'/" + s
+    };
+    let hpph = {
+        x: [],
+        y: [],
+        name: 'x^2 (' + s + ")''/" + s
     };
     for (let x = 0.0; x <= 1.0; x += 1./128) {
         let g = LSV_Ln_pp(vvv, x, alpha, N);
@@ -85,8 +98,14 @@ function compute_h(N) {
 
         hpp.x.push(x);
         hpp.y.push(g[2]);
+
+        hph.x.push(x);
+        hph.y.push(- x * g[1] / g[0]);
+
+        hpph.x.push(x);
+        hpph.y.push(x * x * g[2] / g[0]);
     }
-    return [h, hp, hpp];
+    return [[h, hp, hpp], [hph, hpph]];
 }
 
 function three_conditions(N) {
@@ -109,6 +128,7 @@ function three_conditions(N) {
             wpp2 = LSV_right_wpp(y2, alpha);
 
         let A = h1[1] / h1[0] * w1 + wp1 - (h2[1] / h2[0] * w2 + wp2);
+        A = -A;
 
         let B = h1[2] / h1[0] * w1 * w1 + 3 * h1[1] / h1[0] * wp1 * w1 + wpp1 * w1 + wp1 * wp1 -
             (   h2[2] / h2[0] * w2 * w2 + 3 * h2[1] / h2[0] * wp2 * w2 + wpp2 * w2 + wp2 * wp2 );
@@ -116,7 +136,7 @@ function three_conditions(N) {
         let C = y1 / (1 + h2[0] * w2 / (h1[0] * w1))  +  y2 / (1 + h1[0] * w1 / (h2[0] * w2));
         C = x - C;
 
-        return [-A, B, C];
+        return [A, B, C];
     }
 
     let c1 = {
