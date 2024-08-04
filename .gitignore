@@ -2,5 +2,7 @@ bb/32.js
 bb/32.wasm
 demo/em.js
 demo/em.wasm
+demo/caro/lsv-cpp.js
+demo/caro/lsv-cpp.wasm
 shear-flow/20.js
 shear-flow/20.wasm

@@ -4,18 +4,23 @@
         <div id="demo"></div>
         <p>
             \[
-                T \colon x \mapsto \begin{cases}
-                    x (1 + 2^\gamma x^\gamma)  &amp; x &lt; 1/2 \\
-                    2 x - 1                    &amp; \text{else}
+                h(x) = \begin{cases}
+                    x             &amp; x &gt; 1/2 \\
+                    2 h(2x) - h(x + 0.5)    &amp; \text{else}
                 \end{cases}
             \]
         </p>
 
-        <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+        <script src="https://cdn.plot.ly/plotly-2.34.0.min.js" charset="utf-8"></script>
         
         <script>
-            function LSV(x) {
-                return x * (1 + Math.pow(2 * x, 0.75));
+            function silly(x) {
+                if (x <= 0 || x >= 1) { return 0; }
+                if (x >= 0.5) {
+                    return x;
+                } else {
+                    return 2* silly(2 * x) - silly(x + 0.5);
+                }
             }
             
             var graph = {
@@ -24,14 +29,10 @@
             };
 
             // first branch
-            for (let x = 0; x <= 0.5; x += 0.5 / 16) {
+            for (let x = 1./2048; x <= 1.0; x += 1.0 / 2048) {
                 graph.x.push(x);
-                graph.y.push(LSV(x));
+                graph.y.push(silly(x));
             }
-
-            //second branch
-            graph.x.push(NaN, 0.5, 1.0);
-            graph.y.push(NaN, 0.0, 1.0);
 
             Plotly.newPlot("demo", [graph]);
         </script>

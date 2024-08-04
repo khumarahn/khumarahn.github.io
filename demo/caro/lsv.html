@@ -6,7 +6,7 @@
         <style>
         body {
             margin: auto;
-            max-width: 64em;
+            max-width: 62em;
         }
         </style>
     </head>
@@ -27,8 +27,8 @@
         <div style="width: 75%;margin: auto;">
             \(\alpha\): <span id="alphaValue"></span>
             <br>
-            <input id="alphaSlider" style="width:100%" type="range" min="1" max="128" value="48"
-            class="slider" onchange="alphaChange();">
+            <input id="alphaSlider" style="width:100%" type="range" min="16" max="256" value="48"
+            class="slider" onchange="alphaChange();" oninput="alphaInput();">
         </div>
 
         <h3>Iterates of the transfer operator</h3>
@@ -59,12 +59,15 @@
 
         <h3>Density and derivatives</h3>
         <div>
-            Here we plot \(L^n 1\) with its first two derivatives as an approximation of the invariant density.
+            Here we plot an approximation of the invariant density \(h\) normalized so that \(\int_{1/2}^1 h(x) \, dx = 1\).
+            Unlike the crude graphs above, this approximation is precise and very delicate.
+            We use the code by Caroline Wormell <a href="https://arxiv.org/abs/2106.01498">arXiv:2106.01498</a>
+            ported to C++. For speed, it is configured for low accuracy of roughly 24 bit, which is about 7 decimal digits.
         </div>
         <div id='hn'></div>
         <div>
-            And these are the plots of \((L^n 1)' / L^n 1\) and \((L^n 1)' / L^n 1\),
-            which should behave like \(1/x\) and \(1/x^2\) respectively.
+            And here are the plots of \(h' / h\) and \(h'' / h\),
+            which near \(x = 0\) should behave like \(1/x\) and \(1/x^2\) respectively.
         </div>
         <div id='hph'></div>
 
@@ -111,8 +114,10 @@
             mean that the condition holds.
         </div>
         <div id='ccc'></div>
+        <div id='test'></div>
 
         <script src="lsv.js"></script>
         <script src="lsv-graph.js"></script>
+        <script src="lsv-cpp.js"></script>
     </body>
 </html>

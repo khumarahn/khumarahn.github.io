@@ -24,19 +24,27 @@ function lsv_trace() {
 }
 
 function alphaChange() {
-    alpha = document.getElementById("alphaSlider").value / 64;
+    alpha = alphaInput();
     document.getElementById("alphaValue").innerHTML = alpha.toFixed(4);
     Plotly.newPlot('lsv', [lsv_trace()]);
 
+    lsv_cpp.set_gamma(1. / alpha);
+
     let v = new Function('x', 'return ' + document.getElementById("v").value);
 
-    Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0.0, 2.0]}, xaxis: {dtick: 0.125}});
+    Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0.0, 2.0]}, xaxis: {range: [0,1], dtick: 0.125}});
 
-    let h = compute_h(14);
-    Plotly.newPlot('hn', h[0], { yaxis: {range: [-8.0, 8.0]}, xaxis: {dtick: 0.125}});
-    Plotly.newPlot('hph', h[1], { yaxis: {range: [0, 4.0]}, xaxis: {dtick: 0.125}});
+    let h = compute_h();
+    Plotly.newPlot('hn', h[0], { yaxis: {range: [-24.0, 24.0]}, xaxis: {range: [0,1], dtick: 0.125}});
+    Plotly.newPlot('hph', h[1], { yaxis: {autoscale: true}, xaxis: {range: [0,1], dtick: 0.125}});
 
-    Plotly.newPlot('ccc', three_conditions(14), { yaxis: {range: [-1.0, 8.0]}, xaxis: {dtick: 0.125}});
+    Plotly.newPlot('ccc', three_conditions(14), { yaxis: {type: 'log', autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
+}
+
+function alphaInput() {
+    let a = document.getElementById("alphaSlider").value / 64;
+    document.getElementById("alphaValue").innerHTML = a.toFixed(4) + " (wait for calculations!)";
+    return a;
 }
 
 function computeLv(v, n) {
@@ -46,25 +54,20 @@ function computeLv(v, n) {
             x: [],
             y: [],
             type: 'scatter',
-            name: 'log(L^'+k.toString()+' v)',
+            name: 'L^'+k.toString()+' v',
             visible: 'legendonly'
         };
         for (let x = 0.0; x <= 1.0; x += 1./128) {
             trace.x.push(x);
-            trace.y.push(Math.log(LSV_Ln(v, x, alpha, k))); // / LSV_Ln(v, x, alpha, 12));
+            trace.y.push(LSV_Ln(v, x, alpha, k));
         }
         traces.push(trace);
     }
     return traces;
 }
 
-function compute_h(N) {
-    function vvv(x) {
-        let gamma = 1. / alpha;
-        let f = Math.pow(x, - gamma - 2) / 4;
-        return [x * x * f, - gamma * f * x, gamma * (gamma + 1) * f];
-    }
-    let s = 'L^' + N.toString() + ' 1';
+function compute_h() {
+    let s = 'h';
     let h = {
         x: [],
         y: [],
@@ -73,49 +76,45 @@ function compute_h(N) {
     let hp = {
         x: [],
         y: [],
-        name: '(' + s + ")'"
+        name: "h'"
     };
     let hpp = {
         x: [],
         y: [],
-        name: '(' + s + ")''"
+        name: "h''"
     };
     let hph = {
         x: [],
         y: [],
-        name: '- x (' + s + ")'/" + s
+        name: "- x h'(x) / h(x)"
     };
     let hpph = {
         x: [],
         y: [],
-        name: 'x^2 (' + s + ")''/" + s
+        name: "x^2 h''(x) / h(x)"
     };
-    for (let x = 0.0; x <= 1.0; x += 1./128) {
-        let g = LSV_Ln_pp(vvv, x, alpha, N);
+    for (let x = 1./16; x <= 1.0; x += 1./128) {
         h.x.push(x);
-        h.y.push(Math.log(g[0]));
+        h.y.push(lsv_cpp.rho(x));
 
-        //hp.x.push(x);
-        //hp.y.push(g[1]);
+        hp.x.push(x);
+        hp.y.push(lsv_cpp.rho_p(x));
 
-        //hpp.x.push(x);
-        //hpp.y.push(g[2]);
-
+        hpp.x.push(x);
+        hpp.y.push(lsv_cpp.rho_pp(x));
+        
         hph.x.push(x);
-        hph.y.push(- x * g[1] / g[0]);
+        hph.y.push(-x * lsv_cpp.rho_p(x) / lsv_cpp.rho(x));
 
         hpph.x.push(x);
-        hpph.y.push(x * x * g[2] / g[0]);
+        hpph.y.push(x * x * lsv_cpp.rho_pp(x) / lsv_cpp.rho(x));
     }
     return [[h, hp, hpp], [hph, hpph]];
 }
 
 function three_conditions(N) {
-    function vvv(x) {
-        return [1, 0, 0];
-    }
     function h(x) {
-        return LSV_Ln_pp(vvv, x, alpha, N);
+        return [lsv_cpp.rho(x), lsv_cpp.rho_p(x), lsv_cpp.rho_pp(x)];
     }
     function COND(x) {
         let y1 = LSV_left_i(x, alpha),
@@ -157,7 +156,7 @@ function three_conditions(N) {
         name: 'C3'
     };
 
-    for (let x = 0.0; x <= 1.0; x += 1./128) {
+    for (let x = 1./16; x <= 1.0; x += 1./128) {
         let c = COND(x);
 
         c1.x.push(x);
@@ -174,7 +173,6 @@ function three_conditions(N) {
     return [c1, c2, c3];
 }
 
-alphaChange();
 
 let Lv_loop_n = 0;
 function Lv_loop() {
@@ -186,4 +184,15 @@ function Lv_loop() {
     Lv_loop_n = (Lv_loop_n + 1) % N;
     Plotly.restyle('Ln', {visible: true}, Lv_loop_n);
 }
-setInterval(Lv_loop, 1500);
+
+var lsv_cpp;
+
+// test
+var Module = {
+    'onRuntimeInitialized': function() {
+        lsv_cpp = new Module.LSV();
+        
+        alphaChange();
+        setInterval(Lv_loop, 1500);
+    }
+};   
