@@ -24,7 +24,7 @@ function lsv_trace() {
 }
 
 function alphaChange() {
-    alpha = document.getElementById("alphaSlider").value / 64;
+    alpha = alphaInput();
     document.getElementById("alphaValue").innerHTML = alpha.toFixed(4);
     Plotly.newPlot('lsv', [lsv_trace()]);
 
@@ -37,6 +37,11 @@ function alphaChange() {
     Plotly.newPlot('hph', h[1], { yaxis: {range: [0, 4.0]}, xaxis: {dtick: 0.125}});
 
     Plotly.newPlot('ccc', three_conditions(14), { yaxis: {range: [-1.0, 8.0]}, xaxis: {dtick: 0.125}});
+}
+function alphaInput() {
+    let a = document.getElementById("alphaSlider").value / 64;
+    document.getElementById("alphaValue").innerHTML = a.toFixed(4) + " (wait for calculations!)";
+    return a;
 }
 
 function computeLv(v, n) {

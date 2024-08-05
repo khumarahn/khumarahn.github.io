@@ -1,6 +1,7 @@
 #pragma once
 
 #include <limits>
+#include <vector>
 #include <complex>
 #include <cmath> // for pow, abs, log, ... for standard types
 #include <type_traits>
@@ -31,6 +32,8 @@ class LSV {
 
         template <typename var_t>
             using Vector2 = Eigen::Matrix<var_t,2,1>;
+        template <typename var_t>
+            using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
         template <typename var_t>
             using func_t = std::function<var_t (var_t)>;
 
@@ -192,28 +195,40 @@ class LSV {
         }
 
         // transfer operator of induced map, the clever one
-        // requires two observables as input: the real and the complex versions of the same thing
-        real_cheb_t Lind(const real_cheb_t &cheb) const {
-            real_cheb_t R(0.5, 1.0, cheb.N());
+        MatrixXr Lind() const {
+            std::vector<real_cheb_t> chebs(N_);
+            for (int k = 0; k < N_; k++) {
+                VectorXr c = VectorXr::Zero(N_);
+                c(k) = 1;
+                chebs[k] = real_cheb_t(c, 0.5, 1.0);
+            }
 
-            const VectorXr x_nodes = R.nodes();
-            VectorXr L_values(x_nodes.size());
+            const VectorXr x_nodes = chebs[0].nodes();
+            assert(x_nodes.size() == N_);
+
+            MatrixXr L_values(N_, N_);
 
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 real_t x = x_nodes[ix];
-                real_t r = 0;
+                VectorXr r = VectorXr::Zero(N_);
 
-                auto v = [&cheb]<typename var_t>(var_t x) -> var_t { return cheb(x); };
+                // evaluation of all chebs
+                auto v = [&chebs, this]<typename var_t>(var_t x) {
+                    VectorX<var_t> ret(N_);
+                    for (int k = 0; k < N_; k++)
+                        ret(k) = chebs[k](x);
+                    return ret;
+                };
 
                 auto evaluate_branch_real = [&v, this](const real_t &v0xn, const real_t &dv0xn,
-                                                       const real_t &weight) -> real_t {
+                                                       const real_t &weight) -> VectorXr {
                     Vector2r y = right_inv(v0xn);
-                    return v(y(0)) * weight * dv0xn * y(1);
+                    return v(y(0)) * (weight * dv0xn * y(1));
                 };
                 auto evaluate_branch_cplx = [&v, this](const complex_t &v0xn, const complex_t &dv0xn,
-                                                       const complex_t &weight) -> complex_t {
+                                                       const complex_t &weight) -> VectorXc {
                     Vector2c y = right_inv(v0xn);
-                    return v(y(0)) * weight * dv0xn * y(1);
+                    return v(y(0)) * (weight * dv0xn * y(1));
                 };
 
                 // add branches naively up to Nstar
@@ -241,7 +256,7 @@ class LSV {
                     Vector2c Aixn = abel_inv(complex_t(Ax) + n_cplx);
                     complex_t dv0xn = dAx * Aixn(1);
 
-                    r += std::real(evaluate_branch_cplx(Aixn(0), dv0xn, weight));
+                    r += evaluate_branch_cplx(Aixn(0), dv0xn, weight).real();
                 }
 
                 // do the integral, again as a linear combination of point evaluations
@@ -258,10 +273,15 @@ class LSV {
                     }
                 }
 
-                L_values(ix) = r;
+                L_values.col(ix) = r;
             }
 
-            R.set_from_values(L_values);
+            MatrixXr R(N_, N_);
+            for (int k = 0; k < N_; k++) {
+                real_cheb_t c(0.5, 1.0, N_);
+                c.set_from_values(L_values.row(k).transpose());
+                R.col(k) = c.coef();
+            }
 
             return R;
         }

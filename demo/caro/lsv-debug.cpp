@@ -8,8 +8,8 @@
 
 #include "lsv.h"
 
-typedef long double real_t;
-const int PREC = 24;
+typedef double real_t;
+const int PREC = 42;
 
 typedef Eigen::Matrix<real_t,3,1>                           Vector3r;
 typedef Eigen::Matrix<real_t,Eigen::Dynamic,1>              VectorXr;
@@ -27,55 +27,29 @@ template<typename var_t> var_t QUB(var_t x) {
     return x * x * x;
 }
 
-// approximate an operator in Cheb basis
-MatrixXr operatorApprox(cheb_operator_t T, real_t a, real_t b, int N) {
-
-    MatrixXr R(N, N);
-
-    for (int i = 0; i < N; i++) {
-        VectorXr v = VectorXr::Zero(N);
-        v(i) = 1;
-
-        real_cheb_t c(v, a, b);
-
-        VectorXr coef = T(c).coef();
-
-        for (int j = 0; j < N; j++) {
-            R(j, i) = (j < coef.size()) ? coef(j) : 0;
-        }
-    }
-
-    return R;
-}
-
 typedef lsv_ns::LSV<real_t, PREC> BaseLSV;
 
 class LSV : public BaseLSV {
     private:
         real_cheb_t h_cheb_, h_cheb_p_, h_cheb_pp_;
+        MatrixXr R_;
     public:
         void set_gamma(double gamma) {
             BaseLSV::set_gamma(gamma);
 
             real_t a = 0.5, b = 1.0;
 
-            int N = NCheb();
-
-            auto L = [this](const real_cheb_t &cheb) -> real_cheb_t {
-                return this->Lind(cheb);
-            };
-            MatrixXr R = operatorApprox(L, a, b, N);
-            Eigen::EigenSolver<MatrixXr> eigensolver(R);
+            R_ = Lind();
+            Eigen::EigenSolver<MatrixXr> eigensolver(R_);
 
             VectorXr ev_abs = eigensolver.eigenvalues().cwiseAbs();
 
-            std::vector<int> idx(R.rows());
+            std::vector<int> idx(R_.rows());
             std::iota(idx.begin(), idx.end(), 0);
             std::sort(idx.begin(), idx.end(),
                     [&ev_abs] (int i, int j) { return ev_abs(i) > ev_abs(j); });
 
             // approximation of invariant function
-            //real_t max_ev = eigensolver.eigenvalues().real()(idx[0]);
             real_cheb_t hn(eigensolver.eigenvectors().col(idx[0]).real(), a, b);
             // normalize so that integral on [0.5, 1.0] is one
             real_cheb_t hi = hn.integral();
@@ -114,25 +88,6 @@ class LSV : public BaseLSV {
                    w1 = - fpp / (fp*fp),
                    w2 = - fppp / (fp*fp) + 2 * (fpp*fpp) / (fp*fp*fp);
             return Vector3r(w0, w1, w2);
-        }
-        Vector3r rho_full(real_t x) {
-            if (x < 1./64) {
-                return Vector3r(0,0,0);
-            } else if (x >= 0.5) {
-                return Vector3r(h_cheb_(x), h_cheb_p_(x), h_cheb_pp_(x));
-            } else {
-                real_t tx = left(x)(0),
-                       y = (tx + 1) / 2;
-                Vector3r wx = www(x);
-                real_t wy = 0.5;
-                Vector3r rho_y  = rho_full(y),
-                         rho_tx = rho_full(tx);
-                real_t rho_x = (rho_tx(0) - rho_y(0) * wy) / wx(0),
-                       rhop_x = (rho_tx(1) - rho_y(1) * (wy * wy) - rho_x * wx(0) * wx(1)) / (wx(0) * wx(0)),
-                       long_stuff = 3 * rhop_x * wx(1) * wx(0) * wx(0)  +  rho_x * wx(0) * (wx(2) * wx(0) + wx(1) * wx(1)),
-                       rhopp_x = (rho_tx(2) - rho_y(2) * (wy*wy*wy) - long_stuff) / (wx(0) * wx(0) * wx(0));
-                return Vector3r (rho_x, rhop_x, rhopp_x);
-            }
         }
         Vector3r h_full(const real_t &x) const {
             if (x < 1./128 - 1./1024) {
@@ -200,8 +155,7 @@ int main() {
         lsv.set_gamma(1. / alpha);
         cout << "gamma: " << lsv.gamma()
             << "\n"
-            //<< "rho(1/8): " << lsv.rho_full(1./8).transpose() << "\n"
-            << "  h(1/128): " << lsv.h_full(1./128).transpose() << "\n"
+            << "  h(1/128) / h(1): " << (lsv.h_full(1./128).array() / lsv.h_full(1.).array()).transpose()  << "\n"
             << "\n";
     }
 

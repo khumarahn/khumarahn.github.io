@@ -10,7 +10,7 @@
 using namespace emscripten;
 
 typedef double real_t;
-const int PREC = 24;
+const int PREC = 42;
 
 typedef Eigen::Matrix<real_t,3,1>                           Vector3r;
 typedef Eigen::Matrix<real_t,Eigen::Dynamic,1>              VectorXr;
@@ -28,59 +28,33 @@ template<typename var_t> var_t QUB(var_t x) {
     return x * x * x;
 }
 
-// approximate an operator in Cheb basis
-MatrixXr operatorApprox(cheb_operator_t T, real_t a, real_t b, int N) {
-
-    MatrixXr R(N, N);
-
-    for (int i = 0; i < N; i++) {
-        VectorXr v = VectorXr::Zero(N);
-        v(i) = 1;
-
-        real_cheb_t c(v, a, b);
-
-        VectorXr coef = T(c).coef();
-
-        for (int j = 0; j < N; j++) {
-            R(j, i) = (j < coef.size()) ? coef(j) : 0;
-        }
-    }
-
-    return R;
-}
-
 typedef lsv_ns::LSV<real_t, PREC> BaseLSV;
 
 class LSV : public BaseLSV {
     private:
         real_cheb_t h_cheb_, h_cheb_p_, h_cheb_pp_;
+        MatrixXr R_;
     public:
         void set_gamma(double gamma) {
             BaseLSV::set_gamma(gamma);
 
             real_t a = 0.5, b = 1.0;
 
-            int N = NCheb();
-
-            auto L = [this](const real_cheb_t &cheb) -> real_cheb_t {
-                return this->Lind(cheb);
-            };
-            MatrixXr R = operatorApprox(L, a, b, N);
-            Eigen::EigenSolver<MatrixXr> eigensolver(R);
+            R_ = Lind();
+            Eigen::EigenSolver<MatrixXr> eigensolver(R_);
 
             VectorXr ev_abs = eigensolver.eigenvalues().cwiseAbs();
 
-            std::vector<int> idx(R.rows());
+            std::vector<int> idx(R_.rows());
             std::iota(idx.begin(), idx.end(), 0);
             std::sort(idx.begin(), idx.end(),
                     [&ev_abs] (int i, int j) { return ev_abs(i) > ev_abs(j); });
 
             // approximation of invariant function
-            //real_t max_ev = eigensolver.eigenvalues().real()(idx[0]);
             real_cheb_t hn(eigensolver.eigenvectors().col(idx[0]).real(), a, b);
             // normalize so that integral on [0.5, 1.0] is one
             real_cheb_t hi = hn.integral();
-            real_t norm = hi(1.0) - hi(0.5);
+            real_t norm = hi(real_t(1.0)) - hi(real_t(0.5));
 
             h_cheb_ = real_cheb_t(hn.coef() / norm, a, b);
             h_cheb_p_ = h_cheb_.derivative();
