@@ -35,7 +35,7 @@ class LSV : public BaseLSV {
         real_cheb_t h_cheb_, h_cheb_p_, h_cheb_pp_;
         MatrixXr R_;
     public:
-        void set_gamma(double gamma) {
+        void set_gamma(real_t gamma) {
             BaseLSV::set_gamma(gamma);
 
             real_t a = 0.5, b = 1.0;
@@ -63,21 +63,8 @@ class LSV : public BaseLSV {
         LSV() {
             set_gamma(1.0);
         }
-        double gamma() const {
+        real_t gamma() const {
             return BaseLSV::gamma();
-        }
-        double h(real_t x) const {
-            if (x < 1./128 )
-                return 0;
-            if (x > 1)
-                return h(1);
-            if (x >= 0.5)
-                return h_cheb_(x);
-
-            Vector2r z = left(x);
-            Vector2r w = right_inv(z(0));
-
-            return (h(z(0)) - h(w(0)) * w(1)) * z(1);
         }
         // inverse derivatives
         Vector3r www(real_t x) const {
@@ -136,13 +123,13 @@ class LSV : public BaseLSV {
                 return factor * hx + sum;
             }
         }
-        real_t rho(real_t x) {
+        real_t h(real_t x) {
             return h_full(x)(0);
         }
-        real_t rho_p(real_t x) {
+        real_t h_p(real_t x) {
             return h_full(x)(1);
         }
-        real_t rho_pp(real_t x) {
+        real_t h_pp(real_t x) {
             return h_full(x)(2);
         }
 };
@@ -152,8 +139,7 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .constructor()
         .function("gamma", &LSV::gamma)
         .function("set_gamma", &LSV::set_gamma)
-        .function("rho", &LSV::rho)
-        .function("rho_p", &LSV::rho_p)
-        .function("rho_pp", &LSV::rho_pp)
-        .function("h", &LSV::h);
+        .function("h", &LSV::h)
+        .function("h_p", &LSV::h_p)
+        .function("h_pp", &LSV::h_pp);
 }

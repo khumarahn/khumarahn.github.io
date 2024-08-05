@@ -95,26 +95,26 @@ function compute_h() {
     };
     for (let x = 1./16; x <= 1.0; x += 1./128) {
         h.x.push(x);
-        h.y.push(lsv_cpp.rho(x));
+        h.y.push(lsv_cpp.h(x));
 
         hp.x.push(x);
-        hp.y.push(lsv_cpp.rho_p(x));
+        hp.y.push(lsv_cpp.h_p(x));
 
         hpp.x.push(x);
-        hpp.y.push(lsv_cpp.rho_pp(x));
+        hpp.y.push(lsv_cpp.h_pp(x));
         
         hph.x.push(x);
-        hph.y.push(-x * lsv_cpp.rho_p(x) / lsv_cpp.rho(x));
+        hph.y.push(-x * lsv_cpp.h_p(x) / lsv_cpp.h(x));
 
         hpph.x.push(x);
-        hpph.y.push(x * x * lsv_cpp.rho_pp(x) / lsv_cpp.rho(x));
+        hpph.y.push(x * x * lsv_cpp.h_pp(x) / lsv_cpp.h(x));
     }
     return [[h, hp, hpp], [hph, hpph]];
 }
 
 function three_conditions(N) {
     function h(x) {
-        return [lsv_cpp.rho(x), lsv_cpp.rho_p(x), lsv_cpp.rho_pp(x)];
+        return [lsv_cpp.h(x), lsv_cpp.h_p(x), lsv_cpp.h_pp(x)];
     }
     function COND(x) {
         let y1 = LSV_left_i(x, alpha),

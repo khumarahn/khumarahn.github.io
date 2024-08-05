@@ -1,4 +1,4 @@
-//#define NDEBUG // disable Eigen's range checking, asserts and other good things
+#define NDEBUG // disable Eigen's range checking, asserts and other good things
 
 #include <numeric>
 #include <Eigen/Dense>
@@ -8,8 +8,18 @@
 
 #include "lsv.h"
 
-typedef double real_t;
-const int PREC = 42;
+// boost multiprecision or (long) double
+#if 1
+#include <boost/multiprecision/mpfr.hpp>
+#include <boost/multiprecision/detail/default_ops.hpp>
+#include <boost/multiprecision/eigen.hpp>
+namespace bmp = boost::multiprecision;
+typedef bmp::number<bmp::mpfr_float_backend<32>> real_t; // in decimal digits
+const int PREC = 90; // in bits
+#else
+typedef long double real_t;
+const int PREC = 64;
+#endif
 
 typedef Eigen::Matrix<real_t,3,1>                           Vector3r;
 typedef Eigen::Matrix<real_t,Eigen::Dynamic,1>              VectorXr;
@@ -34,7 +44,7 @@ class LSV : public BaseLSV {
         real_cheb_t h_cheb_, h_cheb_p_, h_cheb_pp_;
         MatrixXr R_;
     public:
-        void set_gamma(double gamma) {
+        void set_gamma(real_t gamma) {
             BaseLSV::set_gamma(gamma);
 
             real_t a = 0.5, b = 1.0;
@@ -62,21 +72,8 @@ class LSV : public BaseLSV {
         LSV() {
             set_gamma(1.0);
         }
-        double gamma() const {
+        real_t gamma() const {
             return BaseLSV::gamma();
-        }
-        double h(real_t x) const {
-            if (x < 1./128 )
-                return 0;
-            if (x > 1)
-                return h(1);
-            if (x >= 0.5)
-                return h_cheb_(x);
-
-            Vector2r z = left(x);
-            Vector2r w = right_inv(z(0));
-
-            return (h(z(0)) - h(w(0)) * w(1)) * z(1);
         }
         // inverse derivatives
         Vector3r www(real_t x) const {
@@ -135,13 +132,13 @@ class LSV : public BaseLSV {
                 return factor * hx + sum;
             }
         }
-        real_t rho(real_t x) {
+        real_t h(real_t x) {
             return h_full(x)(0);
         }
-        real_t rho_p(real_t x) {
+        real_t h_p(real_t x) {
             return h_full(x)(1);
         }
-        real_t rho_pp(real_t x) {
+        real_t h_pp(real_t x) {
             return h_full(x)(2);
         }
 };
@@ -151,11 +148,16 @@ int main() {
 
     using std::cout;
 
-    for (double alpha = 0.25; alpha <= 4.0; alpha += 0.125) {
-        lsv.set_gamma(1. / alpha);
+    auto h = [&lsv] (real_t x) -> real_t {
+        return lsv.h(x);
+    };
+
+    for (real_t gamma = 0.25; gamma <= 4.0; gamma += 0.25) {
+        lsv.set_gamma(gamma);
         cout << "gamma: " << lsv.gamma()
             << "\n"
-            << "  h(1/128) / h(1): " << (lsv.h_full(1./128).array() / lsv.h_full(1.).array()).transpose()  << "\n"
+            << "h(1/2) / h(1) sanity test: " << h(0.5) / h(1) - (gamma + 2) / 2 << "\n"
+            << "h(1/128) / h(1): " << (lsv.h_full(1./128).array() / lsv.h_full(1.).array()).transpose()  << "\n"
             << "\n";
     }
 
