@@ -1,5 +1,5 @@
 OO = -I/usr/include/eigen3 -lembind -Wall -std=c++20 -sALLOW_MEMORY_GROWTH=1
-DD = -I/usr/include/eigen3 -Wall -std=c++20 -lgmp -lmpfr #-fsanitize=address -fsanitize=address -fsanitize=leak -fsanitize=undefined -ftrapv -g
+DD = -I./eigen -Wall -std=c++20 -lgmp -lmpfr -g #-fsanitize=address -fsanitize=address -fsanitize=leak -fsanitize=undefined -ftrapv
 
 .PHONY em::
 	rm -f lsv-cpp.js lsv-cpp.wasm

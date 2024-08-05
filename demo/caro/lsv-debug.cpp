@@ -8,8 +8,10 @@
 
 #include "lsv.h"
 
-// boost multiprecision or (long) double
-#if 1
+// boost multiprecision or (long) double;
+// we need a patched version of Eigen for anything more precise than double because of
+// https://gitlab.com/libeigen/eigen/-/issues/2841
+#if 0
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/multiprecision/detail/default_ops.hpp>
 #include <boost/multiprecision/eigen.hpp>

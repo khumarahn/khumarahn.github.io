@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <script src='https://cdn.plot.ly/plotly-2.34.0.min.js' charset="utf-8"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
         <style>
         body {
             margin: auto;
-            max-width: 62em;
+            max-width: 42em;
         }
         </style>
     </head>
@@ -39,8 +41,8 @@
         We are interested in the iterates \(L^n v\) for functions \(v\) with \(\|v - 1\|_{C^1}\) small.
         Choose such a \(v\) and use a simple and innefficient algorithm to plot \(L^n v\):
         <div id='Ln'></div>
-        <div style="width:75%;margin:auto;margin-bottom:1em">
-            \(v(x)\): <input type="text" id="v" size="75%" value="1 + 0.05 * Math.sin(6*Math.PI*x)" />
+        <div style="width:65%;margin:auto;margin-bottom:1em">
+            \(v(x)\): <input type="text" id="v" style="width:75%" value="1 + 0.05 * Math.sin(6*Math.PI*x)" />
             <input type="button" onclick="alphaChange();" value="Set" />
         </div>
         <div>
@@ -63,7 +65,7 @@
             Unlike the crude graphs above, this approximation is precise and very delicate.
             We use the code by Caroline Wormell <a href="https://arxiv.org/abs/2106.01498">arXiv:2106.01498</a>
             ported to C++. For speed, it is configured for lower accuracy of roughly 42 bit, which is about 12 decimal digits.
-            (This is the expected accuracy on the \([1/2,1]\); near zero the accuracy is worse.)
+            (This is the expected accuracy on \([1/2,1]\); near zero the accuracy is worse.)
         </div>
         <div id='hn'></div>
         <div>

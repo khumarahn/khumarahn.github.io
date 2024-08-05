@@ -5,5 +5,6 @@ demo/em.wasm
 demo/caro/lsv-cpp.js
 demo/caro/lsv-cpp.wasm
 demo/caro/lsv-cpp.x
+demo/caro/eigen
 shear-flow/20.js
 shear-flow/20.wasm

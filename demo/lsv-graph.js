@@ -51,12 +51,12 @@ function computeLv(v, n) {
             x: [],
             y: [],
             type: 'scatter',
-            name: 'log(L^'+k.toString()+' v)',
+            name: 'L^'+k.toString()+' v',
             visible: 'legendonly'
         };
         for (let x = 0.0; x <= 1.0; x += 1./128) {
             trace.x.push(x);
-            trace.y.push(Math.log(LSV_Ln(v, x, alpha, k))); // / LSV_Ln(v, x, alpha, 12));
+            trace.y.push(LSV_Ln(v, x, alpha, k));
         }
         traces.push(trace);
     }
