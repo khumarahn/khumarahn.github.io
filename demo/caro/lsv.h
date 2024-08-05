@@ -195,6 +195,8 @@ class LSV {
         }
 
         // transfer operator of induced map, the clever one
+        // This returns an approximation of the induced transfer operator by an
+        // N_ by N_ matrix acting on the Chebyshev coefficients
         MatrixXr Lind() const {
             std::vector<real_cheb_t> chebs(N_);
             for (int k = 0; k < N_; k++) {
@@ -207,7 +209,7 @@ class LSV {
             assert(x_nodes.size() == N_);
 
             MatrixXr L_values(N_, N_);
-
+#pragma omp parallel for shared(L_values)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 real_t x = x_nodes[ix];
                 VectorXr r = VectorXr::Zero(N_);
@@ -272,7 +274,7 @@ class LSV {
                         r += evaluate_branch_real(Aixn(0), dv0xn, weight);
                     }
                 }
-
+#pragma omp critical
                 L_values.col(ix) = r;
             }
 

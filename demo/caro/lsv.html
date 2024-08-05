@@ -39,15 +39,15 @@
             (L v)(x) = \sum_{y \in T^{-1} x} \frac{v(y)}{T'(y)}
         \]
         We are interested in the iterates \(L^n v\) for functions \(v\) with \(\|v - 1\|_{C^1}\) small.
-        Choose such a \(v\) and use a simple and innefficient algorithm to plot \(L^n v\):
+        Choose such a \(v\) and using the above formula compute \(L^n v\):
         <div id='Ln'></div>
-        <div style="width:65%;margin:auto;margin-bottom:1em">
+        <div style="width:75%;margin:auto;margin-bottom:1em">
             \(v(x)\): <input type="text" id="v" style="width:75%" value="1 + 0.05 * Math.sin(6*Math.PI*x)" />
             <input type="button" onclick="alphaChange();" value="Set" />
         </div>
         <div>
-            This computation is most inefficient, and we cannot compute much more than 10 iterates, but
-            it gives an idea.
+            Such a computation is utmost inefficient: we cannot compute much more than 10 iterates.
+            But it gives an idea.
         </div>
         <div>
             We would like to prove that \(L^n v\) is monotone on \([1/2,1]\) in the sense that
@@ -62,9 +62,9 @@
         <h3>Density and derivatives</h3>
         <div>
             Here we plot an approximation of the invariant density \(h\) normalized so that \(\int_{1/2}^1 h(x) \, dx = 1\).
-            Unlike the crude graphs above, this approximation is precise and very delicate.
-            We use the code by Caroline Wormell <a href="https://arxiv.org/abs/2106.01498">arXiv:2106.01498</a>
-            ported to C++. For speed, it is configured for lower accuracy of roughly 42 bit, which is about 12 decimal digits.
+            The invariant density is hard to approximate naively, so we use a precise (and very delicate!) algorithm
+            by Caroline Wormell <a href="https://arxiv.org/abs/2106.01498">arXiv:2106.01498</a> ported to C++.
+            For speed, it is configured for lower accuracy of roughly 42 bit, which is about 12 decimal digits.
             (This is the expected accuracy on \([1/2,1]\); near zero the accuracy is worse.)
         </div>
         <div id='hn'></div>

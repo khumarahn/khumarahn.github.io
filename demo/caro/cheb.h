@@ -3,13 +3,12 @@
 #include <cmath> // for sin and atan for standard types
 #include <type_traits>
 #include <unsupported/Eigen/FFT>
-
-using std::cos;
-using std::atan;
-
 #include <type_traits>
 
 namespace cheb_ns {
+
+using std::atan;
+using std::cos;
 
 template <typename T, typename var_t>
 concept real_or_complex = std::is_same_v<T, var_t> || std::is_same_v<T, std::complex<var_t>>;
@@ -170,4 +169,4 @@ class Cheb {
 template <typename real_t>
 const real_t Cheb<real_t>::pi_ = 4 * atan(real_t(1));
 
-}  // namespace
+} // namespace cheb_ns
