@@ -77,6 +77,12 @@ function alphaChange() {
     }
     R_evector_div.innerHTML += "\\vdots \\end{pmatrix} \\]";
 
+    document.getElementById("lambda_error").innerHTML = "\\( \\varepsilon = \\text{"
+        + (lsv_cpp.R_evalues_real(0) - 1).toExponential(2)
+        + "} + \\text{" + lsv_cpp.R_evalues_imag(0).toExponential(2) + "} i \\)";
+    document.getElementById("h12_error").innerHTML = "\\( "
+        + (lsv_cpp.h(0.5) / lsv_cpp.h(1) - (2 + lsv_cpp.gamma()) / 2).toExponential(2) + "\\)";
+
     MathJax.typeset();
 }
 

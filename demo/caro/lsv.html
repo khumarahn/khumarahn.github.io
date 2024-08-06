@@ -136,6 +136,21 @@
         </div>
         <div id='R_evector'></div>
 
+        <h3>Appendix 3: Sanity check</h3>
+        <div>
+            There are two basic ways to check sanity of the calculation of \(h\):
+            <ul>
+                <li>
+                    The leading eigenvalue of \(R\) should be equal to 1. We got \(1 + \varepsilon\) where
+                    <span id='lambda_error'></span>.
+                </li>
+                <li>
+                    \(\frac{h(1/2)}{h(1)}\) should be equal to \(\frac{2 + \alpha^{-1}}{2}\). Our error here is
+                    <span id='h12_error'></span>.
+                </li>
+            </ul>
+        </div>
+
         <script src="lsv.js"></script>
         <script src="lsv-graph.js"></script>
         <script src="lsv-cpp.js"></script>
