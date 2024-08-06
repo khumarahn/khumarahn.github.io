@@ -12,8 +12,8 @@
 #include <boost/multiprecision/detail/default_ops.hpp>
 #include <boost/multiprecision/eigen.hpp>
 namespace bmp = boost::multiprecision;
-typedef bmp::number<bmp::mpfr_float_backend<32>> real_t; // in decimal digits
-const int PREC = 90; // in bits
+typedef bmp::number<bmp::mpfr_float_backend<64>> real_t; // in decimal digits
+const int PREC = 180; // in bits
 #else
 typedef long double real_t;
 const int PREC = 64;

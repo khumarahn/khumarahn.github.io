@@ -16,5 +16,10 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .function("set_gamma", &LSV::set_gamma)
         .function("h", &LSV::h)
         .function("h_p", &LSV::h_p)
-        .function("h_pp", &LSV::h_pp);
+        .function("h_pp", &LSV::h_pp)
+        .function("R_evalues_real", &LSV::R_evalues_real)
+        .function("R_evalues_imag", &LSV::R_evalues_imag)
+        .function("R_size", &LSV::R_size)
+        .function("R_coef", &LSV::R_coef)
+        .function("h_coef", &LSV::h_coef);
 }

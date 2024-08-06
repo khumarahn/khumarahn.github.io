@@ -8,7 +8,7 @@
         <style>
         body {
             margin: auto;
-            max-width: 42em;
+            max-width: 48em;
         }
         </style>
     </head>
@@ -68,11 +68,6 @@
             (This is the expected accuracy on \([1/2,1]\); near zero the accuracy is worse.)
         </div>
         <div id='hn'></div>
-        <div>
-            And here are the plots of \(h' / h\) and \(h'' / h\),
-            which near \(x = 0\) should behave like \(1/x\) and \(1/x^2\) respectively.
-        </div>
-        <div id='hph'></div>
 
         <h3>Three conditions</h3>
         <div> Let \(h\) denote the density of the invariant measure and let \(w = 1 / T'\).
@@ -117,7 +112,29 @@
             mean that the condition holds.
         </div>
         <div id='ccc'></div>
-        <div id='test'></div>
+
+        <h3>Appendix 1: Asymptotics of \(h'\) and \(h''\) near zero</h3>
+        <div>
+            These are the normalized plots of \(h' / h\) and \(h'' / h\),
+            which near \(x = 0\) should behave like \(1/x\) and \(1/x^2\) respectively:
+        </div>
+        <div id='hph'></div>
+
+        <h3>Appendix 2: Induced transfer operator</h3>
+        <div>
+            The induced transfer operator on \([1/2, 1]\) is approximated by a <span id='R_size'></span>
+            matrix acting on the basis of Chebyshev polynomials.
+            (The first coefficient is doubled because we work in terms of the coefficients \((c_k)\)
+            as in Section 5.8 of the 3rd edition of <a href="https://numerical.recipes">Numerical Recipes</a>.)
+        </div>
+        <div id='R_matrix'></div>
+        <div>
+            The leading eigenvalues are <span id='R_evalues'></span>
+        </div>
+        <div>
+            The leading eigenvector is
+        </div>
+        <div id='R_evector'></div>
 
         <script src="lsv.js"></script>
         <script src="lsv-graph.js"></script>

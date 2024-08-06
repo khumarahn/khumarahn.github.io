@@ -10,6 +10,9 @@ typedef Eigen::Matrix<real_t,Eigen::Dynamic,1>              VectorXr;
 typedef Eigen::Matrix<real_t,3,3>                           Matrix3r;
 typedef Eigen::Matrix<real_t,Eigen::Dynamic,Eigen::Dynamic> MatrixXr;
 
+typedef std::complex<real_t> complex_t;
+typedef Eigen::Matrix<complex_t,Eigen::Dynamic,1>           VectorXc;
+
 typedef cheb_ns::Cheb<real_t> real_cheb_t;
 
 typedef std::function<real_cheb_t(real_cheb_t)> cheb_operator_t;
@@ -27,6 +30,7 @@ class LSV : public BaseLSV {
     private:
         real_cheb_t h_cheb_, h_cheb_p_, h_cheb_pp_;
         MatrixXr R_;
+        VectorXc R_evalues_;
     public:
         void set_gamma(real_t gamma) {
             BaseLSV::set_gamma(gamma);
@@ -52,6 +56,11 @@ class LSV : public BaseLSV {
             h_cheb_ = real_cheb_t(hn.coef() / norm, a, b);
             h_cheb_p_ = h_cheb_.derivative();
             h_cheb_pp_ = h_cheb_p_.derivative();
+
+            // save eigenvalues sorted in decreasing order
+            R_evalues_.resize(R_.rows());
+            for (int j  = 0; j < R_.rows(); j++)
+                R_evalues_(j) = eigensolver.eigenvalues()(idx[j]);
         }
         LSV() {
             set_gamma(1.0);
@@ -116,13 +125,28 @@ class LSV : public BaseLSV {
                 return factor * hx + sum;
             }
         }
-        real_t h(real_t x) {
+        real_t h(real_t x) const {
             return h_full(x)(0);
         }
-        real_t h_p(real_t x) {
+        real_t h_p(real_t x) const {
             return h_full(x)(1);
         }
-        real_t h_pp(real_t x) {
+        real_t h_pp(real_t x) const {
             return h_full(x)(2);
+        }
+        real_t h_coef(int k) const {
+            return h_cheb_.coef()(k);
+        }
+        int R_size() const {
+            return R_.size();
+        }
+        real_t R_coef(int i, int j) const {
+            return R_(i, j);
+        }
+        real_t R_evalues_real(int i) const {
+            return R_evalues_(i).real();
+        }
+        real_t R_evalues_imag(int i) const {
+            return R_evalues_(i).imag();
         }
 };

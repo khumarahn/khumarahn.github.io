@@ -26,7 +26,7 @@ function lsv_trace() {
 function alphaChange() {
     alpha = alphaInput();
     document.getElementById("alphaValue").innerHTML = alpha.toFixed(4);
-    Plotly.newPlot('lsv', [lsv_trace()]);
+    Plotly.newPlot('lsv', [lsv_trace()],{ yaxis: {range: [0,1.02], dtick: 0.25}, xaxis: {range: [0,1.02], dtick: 0.25}});
 
     lsv_cpp.set_gamma(1. / alpha);
 
@@ -39,6 +39,45 @@ function alphaChange() {
     Plotly.newPlot('hph', h[1], { yaxis: {autoscale: true}, xaxis: {range: [0,1], dtick: 0.125}});
 
     Plotly.newPlot('ccc', three_conditions(14), { yaxis: {type: 'log', autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
+
+
+    let R_size = lsv_cpp.R_size();
+    document.getElementById("R_size").innerHTML = R_size.toString() + "x" + R_size.toString();
+    let R_div = document.getElementById("R_matrix");
+    let R_html = "\\[ R = \\begin{pmatrix} ";
+    for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+            R_html += lsv_cpp.R_coef(i,j).toFixed(6) + " & ";
+        }
+        if (i == 0) {
+            R_html += "\\ldots";
+        }
+        R_html += " & \\text{" + lsv_cpp.R_coef(i, R_size - 1).toExponential(3) + "}";
+        R_html += "\\\\";
+    }
+    R_html += "\\vdots & & & & & \\ddots & \\\\";
+    for (let j = 0; j < 5; j++) {
+        R_html += "\\text{" + lsv_cpp.R_coef(R_size - 1, j).toExponential(3) + "}" + " & ";
+    }
+    R_html += " & \\text{" + lsv_cpp.R_coef(R_size - 1, R_size - 1).toExponential(3) + "}";
+    R_html += "\\end{pmatrix} \\]";
+    R_div.innerHTML = R_html;
+
+    let R_evalues_div = document.getElementById("R_evalues");
+    for (let j = 0; j < 5; j++) {
+        R_evalues_div.innerHTML += " \\(" + lsv_cpp.R_evalues_real(j).toFixed(4) + "+" + lsv_cpp.R_evalues_imag(j).toFixed(4) + "i \\)";
+            R_evalues_div.innerHTML += ",";
+    }
+    R_evalues_div.innerHTML += "...";
+
+    let R_evector_div = document.getElementById("R_evector");
+    R_evector_div.innerHTML = "\\[ \\begin{pmatrix} ";
+    for (let j = 0; j < 5; j++) {
+        R_evector_div.innerHTML += lsv_cpp.h_coef(j).toFixed(6) + " \\\\ ";
+    }
+    R_evector_div.innerHTML += "\\vdots \\end{pmatrix} \\]";
+
+    MathJax.typeset();
 }
 
 function alphaInput() {
@@ -102,7 +141,7 @@ function compute_h() {
 
         hpp.x.push(x);
         hpp.y.push(lsv_cpp.h_pp(x));
-        
+
         hph.x.push(x);
         hph.y.push(-x * lsv_cpp.h_p(x) / lsv_cpp.h(x));
 
@@ -173,7 +212,6 @@ function three_conditions(N) {
     return [c1, c2, c3];
 }
 
-
 let Lv_loop_n = 0;
 function Lv_loop() {
     let N = document.getElementById('Ln').data.length;
@@ -187,12 +225,11 @@ function Lv_loop() {
 
 var lsv_cpp;
 
-// test
 var Module = {
     'onRuntimeInitialized': function() {
         lsv_cpp = new Module.LSV();
-        
+
         alphaChange();
         setInterval(Lv_loop, 1500);
     }
-};   
+};
