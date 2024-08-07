@@ -64,6 +64,7 @@ function alphaChange() {
     R_div.innerHTML = R_html;
 
     let R_evalues_div = document.getElementById("R_evalues");
+    R_evalues_div.innerHTML = "";
     for (let j = 0; j < 5; j++) {
         R_evalues_div.innerHTML += " \\(" + lsv_cpp.R_evalues_real(j).toFixed(4) + "+" + lsv_cpp.R_evalues_imag(j).toFixed(4) + "i \\)";
             R_evalues_div.innerHTML += ",";
