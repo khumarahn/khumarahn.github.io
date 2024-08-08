@@ -35,16 +35,18 @@ class LSV {
         template <typename var_t>
             using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
         template <typename var_t>
+            using MatrixX = Eigen::Matrix<var_t,Eigen::Dynamic,Eigen::Dynamic>;
+        template <typename var_t>
             using func_t = std::function<var_t (var_t)>;
 
         typedef Vector2<real_t> Vector2r;
-        typedef Eigen::Matrix<real_t,Eigen::Dynamic,1> VectorXr;
-        typedef Eigen::Matrix<real_t,Eigen::Dynamic,Eigen::Dynamic> MatrixXr;
+        typedef VectorX<real_t> VectorXr;
+        typedef MatrixX<real_t> MatrixXr;
         typedef func_t<real_t> real_func_t;
 
         typedef Vector2<complex_t> Vector2c;
-        typedef Eigen::Matrix<complex_t,Eigen::Dynamic,1> VectorXc;
-        typedef Eigen::Matrix<complex_t,Eigen::Dynamic,Eigen::Dynamic> MatrixXc;
+        typedef VectorX<complex_t> VectorXc;
+        typedef MatrixX<complex_t> MatrixXc;
         typedef func_t<complex_t> complex_func_t;
 
         typedef Cheb<real_t> real_cheb_t;
