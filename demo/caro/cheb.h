@@ -17,7 +17,10 @@ concept real_or_complex = std::is_same_v<T, var_t> || std::is_same_v<T, std::com
 template <typename real_t>
 class Cheb {
     public:
-        typedef Eigen::Matrix<real_t,Eigen::Dynamic,1> VectorXr;
+        template <typename var_t>
+            using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
+
+        typedef VectorX<real_t> VectorXr;
     private:
         static const real_t pi_;
 
@@ -59,7 +62,6 @@ class Cheb {
         };
         Cheb(const real_t &a, const real_t &b, int N) {
             set_abN(a, b, N);
-            coef_ = VectorXr::Zero(N);
         };
 
         VectorXr coef() const { return coef_; };
@@ -84,8 +86,8 @@ class Cheb {
         template <real_or_complex<real_t> var_t>
         var_t value(const var_t &x) const {
             // Clenshaw recurrence
-            var_t d(0),
-                  dd(0),
+            var_t d = 0,
+                  dd = 0,
                   y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_),
                   y2 = var_t(2) * y;
             for (int j = N_ - 1; j > 0; j--) {
@@ -98,6 +100,23 @@ class Cheb {
         template <real_or_complex<real_t> var_t>
         var_t operator()(const var_t &x) const {
             return value(x);
+        }
+
+        // optimized computation of value when coef = (0,...,0,1,0,...,0),
+        // with 1 at index n
+        template <real_or_complex<real_t> var_t>
+        var_t basis_value(const var_t &x, int n) {
+            // Clenshaw recurrence
+            var_t d = (n > 0) ? 1 : 0,
+                  dd = 0,
+                  y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_),
+                  y2 = var_t(2) * y;
+            for (int j = n - 1; j > 0; j--) {
+                var_t sv = d;
+                d = y2 * d - dd;
+                dd = sv;
+            }
+            return y * d - dd + ((n == 0) ? (var_t(0.5)) : 0);
         }
 
         Cheb derivative() const {
