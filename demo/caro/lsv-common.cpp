@@ -143,6 +143,9 @@ class LSV : public BaseLSV {
         real_t R_coef(int i, int j) const {
             return R_(i, j);
         }
+        complex_t R_evalues(int i) const {
+            return R_evalues_(i);
+        }
         real_t R_evalues_real(int i) const {
             return R_evalues_(i).real();
         }

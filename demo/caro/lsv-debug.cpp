@@ -34,7 +34,8 @@ int main() {
         lsv.set_gamma(gamma);
         cout << "gamma: " << lsv.gamma()
             << "\n"
-            << "h(1/2) / h(1) sanity test: " << h(0.5) / h(1) - (gamma + 2) / 2 << "\n"
+            << "h(1/2) / h(1) sanity check: " << h(0.5) / h(1) - (gamma + 2) / 2 << "\n"
+            << "leading eigenvalue sanity check: " << abs(lsv.R_evalues(0) - complex_t(1)) << "\n"
             << "h(1/128) / h(1): " << (lsv.h_full(1./128).array() / lsv.h_full(1.).array()).transpose()  << "\n"
             << "\n";
     }

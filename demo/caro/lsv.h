@@ -200,14 +200,9 @@ class LSV {
         // This returns an approximation of the induced transfer operator by an
         // N_ by N_ matrix acting on the Chebyshev coefficients
         MatrixXr Lind() const {
-            std::vector<real_cheb_t> chebs(N_);
-            for (int k = 0; k < N_; k++) {
-                VectorXr c = VectorXr::Zero(N_);
-                c(k) = 1;
-                chebs[k] = real_cheb_t(c, 0.5, 1.0);
-            }
+            real_cheb_t cheb(0.5, 1.0, N_);
 
-            const VectorXr x_nodes = chebs[0].nodes();
+            const VectorXr x_nodes = cheb.nodes();
             assert(x_nodes.size() == N_);
 
             MatrixXr L_values(N_, N_);
@@ -217,11 +212,8 @@ class LSV {
                 VectorXr r = VectorXr::Zero(N_);
 
                 // evaluation of all chebs
-                auto v = [&chebs, this]<typename var_t>(var_t x) {
-                    VectorX<var_t> ret(N_);
-                    for (int k = 0; k < N_; k++)
-                        ret(k) = chebs[k](x);
-                    return ret;
+                auto v = [&cheb, N = N_]<typename var_t>(const var_t &x) {
+                    return cheb.basis_values(x, N);
                 };
 
                 auto evaluate_branch_real = [&v, this](const real_t &v0xn, const real_t &dv0xn,
