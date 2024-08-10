@@ -5,7 +5,7 @@
 #include "lsv.h"
 
 typedef double real_t;
-const int PREC = 42;
+const int PREC = 52;
 
 #include "lsv-common.cpp"
 

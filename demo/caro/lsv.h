@@ -80,7 +80,7 @@ class LSV {
             real_t nu = 10,
                    Rad = real_t(80) / real_t(100);
 
-            kappa_ = 1 / gamma_;
+            kappa_ = alpha_;
             mlogeps_ = log(real_t(2)) * PREC_;
             N_ = int(ceil(mlogeps_ / Rad));
             Nstar_ = int(ceil(nu + mlogeps_));

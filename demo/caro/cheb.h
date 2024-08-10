@@ -65,7 +65,11 @@ class Cheb {
         };
 
         VectorXr coef() const {
-            return coef_.size() == 0 ? VectorXr::Zero(N_) : coef_; };
+            return coef_.size() == 0 ? VectorXr::Zero(N_) : coef_;
+        };
+        real_t coef(int n) const {
+            return (n < coef_.size()) ? coef_(n) : real_t(0);
+        }
         real_t a() const {return a_; };
         real_t b() const {return b_; };
         int N() const { return N_; };
@@ -106,7 +110,7 @@ class Cheb {
         // optimized computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
         template <real_or_complex<real_t> var_t>
-        var_t basis_value(const var_t &x, int n) {
+        var_t basis_value(const var_t &x, int n) const {
             // Clenshaw recurrence
             var_t d((n > 0) ? 1 : 0),
                   dd(0),
@@ -121,7 +125,7 @@ class Cheb {
         }
         // optimized computation of value at fist N basis vectors
         template <real_or_complex<real_t> var_t>
-        VectorX<var_t> basis_values(const var_t &x, int N) {
+        VectorX<var_t> basis_values(const var_t &x, int N) const {
             VectorX<var_t> ret = VectorX<var_t>::Zero(N);
             ret(0) = var_t(0.5);
             // Clenshaw recurrence

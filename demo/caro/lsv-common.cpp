@@ -135,7 +135,7 @@ class LSV : public BaseLSV {
             return h_full(x)(2);
         }
         real_t h_coef(int k) const {
-            return h_cheb_.coef()(k);
+            return h_cheb_.coef(k);
         }
         int R_size() const {
             return R_.size();

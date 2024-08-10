@@ -64,7 +64,8 @@
             Here we plot an approximation of the invariant density \(h\) normalized so that \(\int_{1/2}^1 h(x) \, dx = 1\).
             The invariant density is hard to approximate naively, so we use a precise (and very delicate!) algorithm
             by Caroline Wormell <a href="https://arxiv.org/abs/2106.01498">arXiv:2106.01498</a> ported to C++.
-            For speed, it is configured for lower accuracy of roughly 42 bit, which is about 12 decimal digits.
+            Our <a href="https://github.com/khumarahn/khumarahn.github.io/tree/main/demo/caro">implementation</a>
+            is not using rigorous numerics, but the expected accuracy is roughly 15 decimal digits.
             (This is the expected accuracy on \([1/2,1]\); near zero the accuracy is worse.)
         </div>
         <div id='hn'></div>
