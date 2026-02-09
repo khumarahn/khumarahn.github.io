@@ -7,3 +7,6 @@ DD = -I./eigen -Wall -std=c++20 -lgmp -lmpfr -fopenmp # -g -fsanitize=address -f
 
 .PHONY debug::
 	g++  $(DD) -O3 -march=native lsv-debug.cpp -o lsv-cpp.x
+
+.PHONY fs::
+	g++  $(DD) -O3 -march=native fs.cpp -o fs.x
