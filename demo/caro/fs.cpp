@@ -30,7 +30,7 @@ const real_t pi = 4 * std::atan(real_t(1));
 
 
 // find a root of f(y) = value, when f and its derivative are given by Cheb
-// using Newton-Raphson in interval [a,b]
+// using Newton-Raphson in interval [low,high]
 real_t cheb_root(const Cheb &f, const Cheb &fp,
         const real_t &low, const real_t &high, const real_t &value) {
     auto FF = [&f, &fp, &value] (real_t y) {
@@ -164,6 +164,57 @@ class fs_t {
 
 };
 
+class std_pair_t {
+    public:
+        Cheb x, rho;
+        std_pair_t(real_func_t x_, real_func_t rho_) {
+            x = Cheb(x_, 0.0, 1.0, CHEB_N);
+            rho = Cheb(rho_, 0.0, 1.0, CHEB_N);
+        }
+        std_pair_t() : std_pair_t([](real_t y) { return 0; }, [](real_t y) { return 1; }) {}
+};
+
+using std_fam_t = std::vector<std_pair_t>;
+
+std_fam_t fam_evolve(const std_fam_t &fam, const fs_t &fs, const real_t &eps) {
+    std_fam_t r;
+    for (const auto &p : fam) {
+        auto ff = [&p, &fs] (real_t y) {
+            return fs.f(p.x.value(y), y);
+        };
+        Cheb f(ff, 0.0, 1.0, CHEB_N);
+        Cheb fp = f.derivative();
+        auto vv = [&p, &fs] (real_t y) {
+            return fs.v(p.x.value(y), y);
+        };
+
+        // loop over branches of f
+        for (int b = 0; b <= 1; b++) {
+            auto finv = [&f, &fp, &b] (real_t y) {
+                return cheb_root(f, fp, 0.0, 1.0, y + b);
+            };
+            auto x_ = [&p, &vv, &finv, &eps] (real_t y) {
+                real_t yi = finv(y);
+                return p.x.value(yi) + eps * vv(yi);
+            };
+            auto rho_ = [&p, &fp, &finv] (real_t y) {
+                real_t yi = finv(y);
+                return p.rho.value(yi) / fp(yi);
+            };
+
+            r.push_back(std_pair_t(x_, rho_));
+        }
+    }
+    return r;
+}
+
+std_fam_t fam_evolve(const std_pair_t &p, const fs_t &fs, const real_t &eps) {
+    std_fam_t fam;
+    fam.push_back(p);
+
+    return fam_evolve(fam, fs, eps);
+}
+
 int main() {
     // construct a Chebyshev approximation and try to invert it!
 
@@ -198,8 +249,8 @@ int main() {
     cout << "integral of the invariant density - 1: " << idi - 1.0
         << "\n";
 
-
     fs_t fs;
+    /*
     max_err = 0;
     for (real_t x = 4.0; x <= 6.0; x += 1. / 128.) {
         auto ds = [&fs, x](real_t y) {
@@ -211,6 +262,28 @@ int main() {
     }
     cout << "error of averages of v in fs: " << max_err
         << "\n";
+    */
+
+    real_t eps = 1./16.;
+    std_fam_t fam(1);
+    for (int k = 0; k < 8; k++) {
+        fam = fam_evolve(fam, fs, eps);
+    }
+    real_t W = 0, U = 0;
+    for (const auto &p : fam) {
+        auto w = [&p] (real_t y) {
+            return p.rho.value(y);
+        };
+        auto u = [&p] (real_t y) {
+            return p.rho.value(y) * p.x.value(y);
+        };
+        W += integrate(w);
+        U += integrate(u);
+    }
+    cout << "W - 1: " << W - 1 << "\n"
+        << "U: " << U
+        << "\n";
+
 
     return 0;
 }
