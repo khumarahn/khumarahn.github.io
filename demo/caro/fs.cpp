@@ -1,6 +1,7 @@
 //#define NDEBUG // disable Eigen's range checking, asserts and other good things
 
 #include <iostream>
+#include <format>
 #include <numeric>
 
 #include <Eigen/Dense>
@@ -178,6 +179,7 @@ using std_fam_t = std::vector<std_pair_t>;
 
 std_fam_t fam_evolve(const std_fam_t &fam, const fs_t &fs, const real_t &eps) {
     std_fam_t r;
+    const real_t epsq = std::sqrt(eps);
     for (const auto &p : fam) {
         auto ff = [&p, &fs] (real_t y) {
             return fs.f(p.x.value(y), y);
@@ -193,9 +195,9 @@ std_fam_t fam_evolve(const std_fam_t &fam, const fs_t &fs, const real_t &eps) {
             auto finv = [&f, &fp, &b] (real_t y) {
                 return cheb_root(f, fp, 0.0, 1.0, y + b);
             };
-            auto x_ = [&p, &vv, &finv, &eps] (real_t y) {
+            auto x_ = [&p, &vv, &finv, &epsq] (real_t y) {
                 real_t yi = finv(y);
-                return p.x.value(yi) + eps * vv(yi);
+                return p.x.value(yi) + epsq * vv(yi);
             };
             auto rho_ = [&p, &fp, &finv] (real_t y) {
                 real_t yi = finv(y);
@@ -264,25 +266,25 @@ int main() {
         << "\n";
     */
 
-    real_t eps = 1./16.;
-    std_fam_t fam(1);
-    for (int k = 0; k < 8; k++) {
-        fam = fam_evolve(fam, fs, eps);
+    for (real_t eps = 1./8.; eps >= 1./1000000.; eps *= 0.75) {
+        std_fam_t fam(1);
+        for (int k = 0; k < 8; k++) {
+            fam = fam_evolve(fam, fs, eps);
+        }
+        real_t W = 0, D = 0;
+        for (const auto &p : fam) {
+            auto w = [&p] (real_t y) {
+                return p.rho.value(y);
+            };
+            auto d = [&p] (real_t y) {
+                return p.rho.value(y) * p.x.value(y);
+            };
+            W += integrate(w);
+            D += integrate(d);
+        }
+        cout << std::format("eps: {:11.8f}, W-1: {:11.8f}, D: {:11.8f}, D/eps: {:11.8f}\n",
+                eps, W-1, D, D/eps);
     }
-    real_t W = 0, U = 0;
-    for (const auto &p : fam) {
-        auto w = [&p] (real_t y) {
-            return p.rho.value(y);
-        };
-        auto u = [&p] (real_t y) {
-            return p.rho.value(y) * p.x.value(y);
-        };
-        W += integrate(w);
-        U += integrate(u);
-    }
-    cout << "W - 1: " << W - 1 << "\n"
-        << "U: " << U
-        << "\n";
 
 
     return 0;
