@@ -151,6 +151,32 @@
                 </li>
             </ul>
         </div>
+        <h3>Appendix 4: Simplified conditions (C1)-(C3)</h3>
+        <div> The three conditions above can be written in a different way,
+            which seems simpler to verify numerically. Here we use that the second branch is exactly
+            \(2x - 1\). As before, let \(h\) denote the density of the invariant measure and let
+            \(w = 1 / T'\). For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of
+            \(x\) under \(T\). Then (C1) is equivalent to:
+            \[
+                \frac{h'(x)}{h(x)}
+                \leq \frac{1}{2} \frac{h'(y_2)}{h(y_2)}
+                \tag{C'1}
+                ,
+            \]
+            (C2) is equivalent to
+            \[
+                \frac{h''(x)}{h(x)}
+                \geq \frac{1}{4} \frac{h''(y_2)}{h(y_2)}
+                \tag{C'2}
+                ,
+            \]
+            and (C3) is equivalent to
+            \[
+                (x - y_1) h(x) \geq \frac{1}{2}(y_2 - y_1) h(y_2)
+                \tag{C'3}
+                .
+            \]
+        </div>
 
         <script src="lsv.js"></script>
         <script src="lsv-graph.js"></script>
