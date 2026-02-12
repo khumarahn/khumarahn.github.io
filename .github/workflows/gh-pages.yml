@@ -28,10 +28,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: update
+        run: sudo apt-get update -y -q
+      - name: upgrade
+        run: sudo apt-get upgrade -y -q
       - name: install eigen
-        run: sudo apt-get install -y libeigen3-dev
+        run: sudo apt-get install -y -q libeigen3-dev
       - name: install boost
-        run: sudo apt-get install -y libboost-all-dev
+        run: sudo apt-get install -y -q libboost-all-dev
       - name: Checkout
         uses: actions/checkout@v4
         with: 
