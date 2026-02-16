@@ -19,7 +19,7 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .function("h_pp", &LSV::h_pp)
         .function("R_evalues_real", &LSV::R_evalues_real)
         .function("R_evalues_imag", &LSV::R_evalues_imag)
-        .function("R_size", &LSV::R_size)
+        .function("R_cols", &LSV::R_cols)
         .function("R_coef", &LSV::R_coef)
         .function("h_coef", &LSV::h_coef);
 }

@@ -41,8 +41,8 @@ function alphaChange() {
     Plotly.newPlot('ccc', three_conditions(14), { yaxis: {type: 'log', autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
 
 
-    let R_size = lsv_cpp.R_size();
-    document.getElementById("R_size").innerHTML = R_size.toString() + "x" + R_size.toString();
+    let R_cols = lsv_cpp.R_cols();
+    document.getElementById("R_cols").innerHTML = R_cols.toString() + "x" + R_cols.toString();
     let R_div = document.getElementById("R_matrix");
     let R_html = "\\[ R = \\begin{pmatrix} ";
     for (let i = 0; i < 5; i++) {
@@ -52,14 +52,14 @@ function alphaChange() {
         if (i == 0) {
             R_html += "\\ldots";
         }
-        R_html += " & \\text{" + lsv_cpp.R_coef(i, R_size - 1).toExponential(3) + "}";
+        R_html += " & \\text{" + lsv_cpp.R_coef(i, R_cols - 1).toExponential(3) + "}";
         R_html += "\\\\";
     }
     R_html += "\\vdots & & & & & \\ddots & \\\\";
     for (let j = 0; j < 5; j++) {
-        R_html += "\\text{" + lsv_cpp.R_coef(R_size - 1, j).toExponential(3) + "}" + " & ";
+        R_html += "\\text{" + lsv_cpp.R_coef(R_cols - 1, j).toExponential(3) + "}" + " & ";
     }
-    R_html += " & \\text{" + lsv_cpp.R_coef(R_size - 1, R_size - 1).toExponential(3) + "}";
+    R_html += " & \\text{" + lsv_cpp.R_coef(R_cols - 1, R_cols - 1).toExponential(3) + "}";
     R_html += "\\end{pmatrix} \\]";
     R_div.innerHTML = R_html;
 
