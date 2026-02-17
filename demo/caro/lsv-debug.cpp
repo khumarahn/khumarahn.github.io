@@ -1,24 +1,19 @@
-#define NDEBUG // disable Eigen's range checking, asserts and other good things
+//#define NDEBUG // disable Eigen's range checking, asserts and other good things
 
 #include <iostream>
 
-#include "lsv.h"
+const int DIGITS = 12;                   // in decimal digits
+const int PREC = (DIGITS * 332) / 100;   // in bits
 
-// CHOOSE: boost multiprecision or (long) double;
-// !! we need a patched version of Eigen for anything more precise than double
-// !! because of https://gitlab.com/libeigen/eigen/-/issues/2841
-#if 1
 #include <boost/multiprecision/mpfr.hpp>
+#include <boost/multiprecision/mpfi.hpp>
 #include <boost/multiprecision/detail/default_ops.hpp>
 #include <boost/multiprecision/eigen.hpp>
 namespace bmp = boost::multiprecision;
-typedef bmp::number<bmp::mpfr_float_backend<64>> real_t; // in decimal digits
-const int PREC = 180; // in bits
-#else
-typedef long double real_t;
-const int PREC = 64;
-#endif
+using real_t = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
+using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
+#include "lsv.h"
 #include "lsv-common.cpp"
 
 int main() {
@@ -26,11 +21,15 @@ int main() {
 
     using std::cout;
 
+    using MatrixXri = Eigen::Matrix<interval_t, Eigen::Dynamic, Eigen::Dynamic>;
+    using VectorXri = Eigen::Matrix<interval_t, Eigen::Dynamic, 1>;
+    using Cheb_i = cheb_ns::Cheb<interval_t>;
+
     auto h = [&lsv] (real_t x) -> real_t {
         return lsv.h(x);
     };
 
-    for (real_t gamma = 0.25; gamma <= 4.0; gamma += 0.25) {
+    for (real_t gamma = 0.75; gamma <= 0.75; gamma += 0.25) {
         lsv.set_gamma(gamma);
         cout << "gamma: " << lsv.gamma()
             << "\n"
@@ -38,6 +37,64 @@ int main() {
             << "leading eigenvalue sanity check: " << abs(lsv.R_evalues(0) - complex_t(1)) << "\n"
             << "h(1/128) / h(1): " << (lsv.h_full(1./128).array() / lsv.h_full(1.).array()).transpose()  << "\n"
             << "\n";
+
+        cout << "LSV basic things computed...\n";
+
+        // Retrieve the transfer operator in interval form,
+        // as an RN x RN matrix acting on Chebyshev polynomials on [0.5,1]
+        // with the first coeff doubled as in Numerical Recipes
+        const int RN = lsv.R_size();
+        cout << "RN: " << RN << "\n";
+        MatrixXri R(RN,RN);
+        for (int i=0; i<RN; i++) {
+            for (int j=0; j<RN; j++) {
+                R(i,j) = interval_t(lsv.R_coef(i,j));
+            }
+        }
+        cout << "Transfer operator retrieved...\n";
+
+        interval_t a = 0.5, b = 1.0;
+
+        // computation of invariant density without eigen decomposition
+        {
+            // On the vector space W of first RN Chebyshev polynomials,
+            // we compute iota : W \to R, w \mapsto \int_{0.5}^1 w
+            // and u \in W so that iota(u) = 1
+            VectorXri iota(RN);
+            VectorXri u(RN);
+
+            // inefficiently compute values of integrals on [1/2,1] of the basis Chebyshev polynomials
+            for (int i=0; i<RN; i++) {
+                // higher dimension because when taking an integral, the coefficients shift
+                VectorXri co(RN+1);
+                co(i) = interval_t(1);
+
+                Cheb_i cheb(co, a, b);
+                Cheb_i ii = cheb.integral();
+
+                iota(i) = ii.value(b) - ii.value(a);
+            }
+            cout << "Integrals of first basis vectors: \n" << iota.head(5).transpose()
+                << "\n";
+
+            u(0) = 1 / iota(0);
+
+            // Now the invariant density in Chebyshev basis
+            // is hh = (I - R + u iota)^{-1} u
+            MatrixXri S = MatrixXri::Identity(RN,RN) - R + u * iota.transpose();
+            VectorXri hv = S.fullPivLu().solve(u);
+
+            cout << "First coeff of h: \n" << hv.head(5).transpose()
+                << "\n";
+            real_t err = 0;
+            for (int i=0; i<RN; i++) {
+                interval_t rr = abs(hv(i) - lsv.h_coef(i));
+                err += bmp::upper(rr);
+            }
+            cout << "L1 error compated to computation using eigen decomposition: " << err
+                << "\n";
+        }
+
     }
 
     return 0;
