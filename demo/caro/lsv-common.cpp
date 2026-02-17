@@ -137,8 +137,8 @@ class LSV : public BaseLSV {
         real_t h_coef(int k) const {
             return h_cheb_.coef(k);
         }
-        int R_size() const {
-            return R_.size();
+        int R_cols() const {
+            return R_.cols();
         }
         real_t R_coef(int i, int j) const {
             return R_(i, j);
