@@ -163,23 +163,6 @@ class LSV {
         }
 
         // inverses
-        /*
-        Vector2r left_inv(const interval_t &x) const {
-            // convex, so Newton should work very well
-            interval_t y = x,
-                   p;
-            for (;;) {
-                Vector2r l = left(y);
-                interval_t f = l(0) - x;
-                p = l(1);
-                interval_t z = y - f / p;
-                if (z >= y)
-                    break;
-                y = z;
-            }
-            return Vector2r(y, 1 / p);
-        }
-        */
         Vector2r left_inv(const interval_t &x) const {
             // max derivative is
             interval_t md = left(0.5)(1);
@@ -237,7 +220,7 @@ class LSV {
             assert(x_nodes.size() == N_);
 
             MatrixXr L_values(N_, N_);
-//#pragma omp parallel for shared(L_values)
+#pragma omp parallel for shared(L_values)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes[ix];
                 VectorXr r = VectorXr::Zero(N_);
@@ -326,7 +309,7 @@ class LSV {
         }
         template <real_or_complex<interval_t> var_t>
         Vector2<var_t> abel_t(const var_t &t) const {
-            std::cout << "called abel_t(" << t << ")\n";
+            //std::cout << "called abel_t(" << t << ")\n";
             var_t A = abel_coef_(0) * t + abel_coef_(1) * log(t) + abel_coef_(2),
                   dA = abel_coef_(0) + abel_coef_(1) / t;
 
@@ -342,11 +325,19 @@ class LSV {
 
         // inverse
         // THIS IS WRONG
-        template <real_or_complex<interval_t> var_t>
-        Vector2<var_t> abel_t_inv(const var_t &a) const {
+        Vector2r abel_t_inv(const interval_t &a) const {
+                // an interval enclosing the root
+                interval_t guess(a / 2, a * 2);
+
+                auto f = [this, &a] (const interval_t &t) {
+                    Vector2r r = abel_t(t);
+                    r(0) -= a;
+                    return r;
+                };
+                return interval_newton(f, guess);
             //std::cout << "called abel_t_inv(" << a << ")\n";
-            var_t t = a / abel_coef_(0);
-            Vector2<var_t> A;
+            interval_t t = a / abel_coef_(0);
+            Vector2r A;
             for (int i=0; i < 1000; i++) {
                 A = abel_t(t);
                 //std::cout << "t: " << t << ", A: " << A
@@ -358,11 +349,32 @@ class LSV {
                 if (i > 77) {
                     break;
                 }
-                std::cout << "A(0) - a / A(1): " << A(0) << " - " << a << " / " << A(1) << "\n";
+                std::cout << "(A(0) - a ) / A(1): (" << A(0) << " - " << a << ") / " << A(1)
+                    << "\n        approx: " << (A(0) - a) / A(1) << "\n";
+                std::cout << "abel coef: " << abel_coef_.head(5).transpose() << "\n";
                 t -= (A(0) - a) / A(1);
                 //std::cout << "new t: " << t << "\n";
             }
-            return Vector2<var_t>(t, var_t(1) / A(1));
+            return Vector2r(t, interval_t(1) / A(1));
+        }
+        Vector2c abel_t_inv(const complex_t &a) const {
+            //std::cout << "called abel_t_inv(" << a << ")\n";
+            complex_t t = a / abel_coef_(0);
+            Vector2c A;
+            for (int i=0; i < 1000; i++) {
+                complex_t m = complex_t(
+                        (bmp::upper(t.real()) + bmp::lower(t.real())) / 2,
+                        (bmp::upper(t.imag()) + bmp::lower(t.imag())) / 2
+                        );
+                //std::cout << "m - abel_t(m) / ) - a ) / A(1): (" << A(0) << " - " << a << ") / " << A(1)
+                //    << "\n        approx: " << (A(0) - a) / A(1) << "\n";
+                //std::cout << "abel coef: " << abel_coef_.head(5).transpose() << "\n";
+                t = m - (abel_t(m)(0) - a) / abel_t(t)(1);
+                if (i > 77) {
+                    break;
+                }
+            }
+            return Vector2c(t, complex_t(1) / abel_t(t)(1));
         }
         template <real_or_complex<interval_t> var_t>
         Vector2<var_t> abel_inv(const var_t &a) const {

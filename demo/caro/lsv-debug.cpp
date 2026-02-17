@@ -2,9 +2,7 @@
 
 #include <iostream>
 
-// precision
-const int DIGITS = 16;                   // in decimal digits
-const int PREC = (DIGITS * 332) / 100;   // in bits
+const int PREC = 96;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -50,14 +48,15 @@ int main() {
 
         // Make it a bit uncertain
         MatrixXri R(RN,RN);
+        real_t errrr = 0;
         for (int i=0; i<RN; i++) {
             for (int j=0; j<RN; j++) {
                 R(i,j) = Lind(i,j);
+                errrr += bmp::upper(R(i,j)) - bmp::lower(R(i,j));
                 // add uncertainty
-                R(i,j) *= interval_t(1 - 1024 * real_epsilon, 1 + 1024 * real_epsilon);
             }
         }
-        cout << "Transfer operator retrieved...\n";
+        cout << "Transfer operator retrieved, L1 uncertainty: " << errrr << " ...\n";
 
         interval_t a = 0.5, b = 1.0;
 
@@ -88,7 +87,8 @@ int main() {
             // Now the invariant density in Chebyshev basis
             // is hh = (I - R + u iota)^{-1} u
             MatrixXri S = MatrixXri::Identity(RN,RN) - R + u * iota.transpose();
-            VectorXri hv = S.householderQr().solve(u);
+            //VectorXri hv = S.householderQr().solve(u);
+            VectorXri hv = S.partialPivLu().solve(u);
 
             cout << "Error in computation of hv: " << (S * hv - u).norm() << "\n";
 
