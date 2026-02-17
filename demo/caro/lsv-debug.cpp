@@ -7,24 +7,24 @@ const int DIGITS = 16;                   // in decimal digits
 const int PREC = (DIGITS * 332) / 100;   // in bits
 
 // headers for multiprecision and interval arithmetics
-#include <boost/multiprecision/mpfr.hpp>
-#include <boost/multiprecision/mpfi.hpp>
-#include <boost/multiprecision/detail/default_ops.hpp>
-#include <boost/multiprecision/eigen.hpp>
+
+#include <Eigen/Dense>
+
+#include "lsv.h"
 
 namespace bmp = boost::multiprecision;
 
-// real and interval types
-using real_t = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
-using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
-const real_t real_epsilon = std::numeric_limits<real_t>::epsilon();
-
-#include "lsv.h"
-#include "lsv-common.cpp"
 
 int main() {
+    using LSV = lsv_ns::LSV<PREC>;
     LSV lsv;
+
+    // real and interval types
+    using real_t = LSV::real_t;
+    using interval_t = LSV::interval_t;
+
+    const real_t real_epsilon = std::numeric_limits<real_t>::epsilon();
 
     using std::cout;
 
@@ -39,23 +39,20 @@ int main() {
     for (real_t gamma = 0.75; gamma <= 0.75; gamma += 0.25) {
         cout << "gamma: " << gamma << "\n";
         lsv.set_gamma(gamma);
-        cout << "h(1/2) / h(1) sanity check: " << lsv.h(0.5) / lsv.h(1) - (gamma + 2) / 2 << "\n"
-            << "leading eigenvalue sanity check: " << abs(lsv.R_evalues(0) - complex_t(1)) << "\n"
-            << "\n";
-
-        cout << "LSV basic things computed...\n";
 
         // Retrieve the transfer operator in interval form,
         // as an RN x RN matrix acting on Chebyshev polynomials on [0.5,1]
         // with the first coeff doubled as in Numerical Recipes
-        //
-        // Make it a bit uncertain
-        const int RN = lsv.R_cols();
+        auto Lind = lsv.Lind();
+        cout << "Transfer operator matrix computed...\n";
+        const int RN = Lind.cols();
         cout << "RN: " << RN << "\n";
+
+        // Make it a bit uncertain
         MatrixXri R(RN,RN);
         for (int i=0; i<RN; i++) {
             for (int j=0; j<RN; j++) {
-                R(i,j) = interval_t(lsv.R_coef(i,j));
+                R(i,j) = Lind(i,j);
                 // add uncertainty
                 R(i,j) *= interval_t(1 - 1024 * real_epsilon, 1 + 1024 * real_epsilon);
             }
@@ -99,14 +96,11 @@ int main() {
 
             cout << "First coeff of h: \n" << hv.head(5).transpose()
                 << "\n";
-            real_t err = 0, errr;
+            real_t err = 0;
             for (int i=0; i<RN; i++) {
-                interval_t rr = abs(hv(i) - lsv.h_coef(i));
-                err += bmp::upper(rr);
-                errr += bmp::upper(hv(i)) - bmp::lower(hv(i));
+                err += bmp::upper(hv(i)) - bmp::lower(hv(i));
             }
-            cout << "L1 error compated to computation using eigen decomposition: " << err << "\n"
-                << "L1 uncertainty of coefficients: " << errr << "\n";
+            cout << "L1 uncertainty of coefficients: " << err << "\n";
         }
 
     }
