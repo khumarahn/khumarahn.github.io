@@ -19,6 +19,8 @@ namespace interval_root_ns {
 
 namespace bmp = boost::multiprecision;
 
+// TYPES
+
 template <unsigned d10>
     using real_t     = boost::multiprecision::number<bmp::mpfr_float_backend<d10>>;
 template <unsigned d10>
@@ -46,14 +48,11 @@ template <unsigned d10>
 template <unsigned d10>
     using MatrixXi = Eigen::Matrix<interval_t<d10>, Eigen::Dynamic, Eigen::Dynamic>;
 
+// HELPER FUNCTIONS FOR COMPLEX INTERVALS
+
 template <unsigned d10>
 complex_t<d10> median(const complex_interval_t<d10> &x) {
     return complex_t<d10>(bmp::median(x.real()), bmp::median(x.imag()));
-}
-
-template <unsigned d10>
-real_t<d10> width(const complex_interval_t<d10> &x) {
-    return max(bmp::width(x.real()), bmp::width(x.imag()));
 }
 
 template <unsigned d10>
@@ -81,6 +80,8 @@ bool proper_subset(const complex_interval_t<d10> &a, const complex_interval_t<d1
         ( bmp::subset(a.real(), b.real()) && bmp::proper_subset(a.imag(), b.imag()) ) ;
 }
 
+// HELPER FUNCTIONS FOR INTERVAL VECTORS
+
 template <unsigned d10>
 VectorXi<d10> intersect(const VectorXi<d10> &a, const VectorXi<d10> &b) {
     assert(a.size() == b.size());
@@ -106,14 +107,14 @@ bool subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
 
 template <unsigned d10>
 bool proper_subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
-    bool proper = false;
     assert(a.size() == b.size());
+    bool proper = false;
     const int N = a.size();
     for (int i=0; i<N; i++) {
         if (!bmp::subset(a(i),b(i))) {
             return false;
         }
-        if (bmp::proper_subset(a(i),b(i))) {
+        if (!proper && bmp::proper_subset(a(i),b(i))) {
             proper = true;
         }
     }
@@ -218,9 +219,9 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
         auto iabs = [] (const auto &x) {
             return max(abs(bmp::lower(x)), abs(bmp::upper(x)));
         };
-        real_t<d10> no = 0;
+        r_t no = 0;
         for (int i=0; i<U.rows(); i++) {
-            real_t<d10> s = 0;
+            r_t s = 0;
             for (int j=0; j<U.cols(); j++) {
                 s += iabs(U(i,j));
             }

@@ -25,6 +25,7 @@ namespace bmp = boost::multiprecision;
 template <typename T, typename... TArgs>
 concept type_one_of = (std::same_as<T, TArgs> || ...);
 
+using std::max;
 using std::pow;
 using std::log;
 using std::ceil;
@@ -83,43 +84,55 @@ class LSV {
         static const real_t real_eps_;
         static const real_t real_eps_sqrt_;
 
-        interval_t alpha_, gamma_;
+        interval_t gamma_;
         VectorXi abel_coef_;
         VectorXr  abel_coef_ni_;
 
         void compute_abel_coef();
         MatrixXix abel_matrix() const;
 
-        // make public for debug
         static constexpr int PREC_ = PREC;
         interval_t kappa_, mlogeps_, tau_, W_;
         int N_, Nstar_, K_, KAbel_, halfM_, M_, Mhat_, P_;
 
+        // error in Abel function
+        interval_t R1_, rn_, d3d2rn_, R1rn_inv_;
+
+        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
+        i_t abel_t_error(const i_t &t) const {
+
+            real_t factor = bmp::upper(d3d2rn_ * pow(interval_t(abs(t)), KAbel_));
+
+            if constexpr (type_one_of<i_t, interval_t, interval_extra_t>) {
+                if (!(t >= R1_ && t >= R1rn_inv_)) {
+                    std::cout << " HUJ: " << R1_ << ", " << R1rn_inv_ << ", " << t << "\n";
+                }
+                assert(t >= R1_ && t >= R1rn_inv_);
+                return i_t(-factor, factor);
+            } else { // complex_interval_t
+                if (!(t.real() >= R1_ && abs(t) >= R1rn_inv_)) {
+                    std::cout << " HUJ: " << R1_ << ", " << R1rn_inv_ << ", " << t << "\n";
+                }
+                assert(t.real() >= R1_ && abs(t) >= R1rn_inv_);
+                return complex_interval_t(interval_t(-factor, factor), interval_t(-factor, factor));
+            }
+        }
+
         VectorXci taylorpoints_, taylorpointweights_;
         MatrixXi integralccpoints_, integralccweights_;
 
-    public: // Newton methods aare TEMPORARY PUBLIC
-        // interval version of Newton method. f is assumed convex, and the root is in [a,b]
-        //Vector2i interval_newton(const std::function<Vector2i (interval_t)>& f,
-        //        const interval_t &guess) const;
-        // ... and a Krawczyk method for complex f
-        Vector2ci complex_krawczyk(const std::function<Vector2ci (complex_interval_t)>& f,
-                const complex_interval_t &guess) const;
-        // .. and a Krawczyk method for a linear equation Ax=b with invertible A
-        VectorXi linear_krawczyk(const MatrixXi &A, const VectorXi &b) const;
     public:
         LSV(const interval_t &gamma = 1) {
             set_gamma(gamma);
         }
         void set_gamma(const interval_t &gamma) {
             gamma_ = gamma;
-            alpha_ = interval_t(1) / gamma_;
 
             // Caro's BASIC CONSTANTS
             interval_t nu = 10,
                    Rad = interval_t(80) / interval_t(100);
 
-            kappa_ = alpha_;
+            kappa_ = interval_t(1) / gamma_;
             mlogeps_ = log(interval_t(2)) * PREC_;
             N_ = int(ceil(mlogeps_ / Rad));
             Nstar_ = int(ceil(nu + mlogeps_));
@@ -161,6 +174,40 @@ class LSV {
                    }
                }
             }
+            { // error in Abel function
+                interval_t hhat1 = gamma_ * pow(2, gamma_);
+                int n = KAbel_ - 1;
+
+                // from abel_bounds.pdf
+                interval_t theta = 0.5, //arbitrary choice by Caroline?
+                           R = theta * pow((1 - theta) / 2, gamma_) * (1 + gamma_ * theta / (1 - theta)),
+                           G = gamma_ * pow(2, 2 * gamma_) / pow(1 - theta, 2) * (
+                                   0.5 * abs(gamma_ - 1) * max(pow(1 + theta, gamma_ - 2), pow(1 - theta, gamma_ - 2))
+                                   + gamma_ * max(pow(1 - theta, gamma_ - 1), pow(1 + theta, gamma_ - 1))
+                                   );
+                // Lemma 4.1
+                interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
+                           d2 = 1 + 2.5 * exp(interval_t(3) / 5) * (1 + 0.4 * G * pow(hhat1, -2)),
+                           d1 = (1 + G * pow(hhat1, -2)) / pow(d2, 2);
+
+                // Lemma 4.2
+                interval_t aleph = 0.5, // arbitrary choice by Alexey
+                           R1 = min(R, aleph * hhat1 / G);
+                // Lemma 4.3
+                interval_t delta = 0,
+                           barbeta = n + 2,
+                           gimel = pow(1 - aleph, -barbeta) * pow(hhat1, -delta - 1) * (
+                                   1 / (delta + 1) + 1 / (barbeta - delta - 1) + hhat1 / R1
+                                   );
+                // (24)
+                interval_t d3 = gimel * d2;
+                R1_ = R1;
+                rn_ = rn;
+                d3d2rn_ = d3 * pow(d2 / rn, n + 2);
+                R1rn_inv_ = 1 / min(R1, rn);
+                std::cout << "R1: " << R1_ << ", rn: " << rn_ << ", d3d2rn: " << d3d2rn_
+                    << ", R1rn_inv: " << R1rn_inv_ << "\n";
+            }
 
             compute_abel_coef();
         }
@@ -168,7 +215,7 @@ class LSV {
         int NCheb() const { return N_; };
         int prec() const { return PREC_; };
         int KAbel() const { return KAbel_; };
-        interval_t alpha() const { return alpha_; };
+        interval_t alpha() const { return 1 / gamma_; };
         interval_t gamma() const { return gamma_; };
         VectorXi abel_coef() const { return abel_coef_; };
 
@@ -276,18 +323,14 @@ class LSV {
                     v0xn = y(0);
                     dv0xn *= y(1);
                 }
-                //std::cout << "v0xn: " << v0xn << ", width: " << bmp::width(v0xn) << "\n";
 
                 // 1/2 sum with the Nstar
                 r += evaluate_branch_real(v0xn, dv0xn, 0.5);
 
                 // figure out Abel function of x and its derivative
                 Vector2i Av0xn = abel(v0xn);
-                //std::cout << "Av0xn: " << Av0xn.transpose() << "\n";
-                //std::cout << "Nstar_: " << Nstar_ << "\n";
                 interval_t Ax = Av0xn(0) - Nstar_,
                            dAx = Av0xn(1) * dv0xn;
-                //std::cout << "Ax: " << Ax << "\n";
 
                 // add the derivatives (all in one go)
                 for (int m = 0; m < halfM_; m++) {
@@ -327,24 +370,23 @@ class LSV {
             return R;
         }
 
-        // Abel function
-        // with t = t(x) = x^{-gamma}
-        // A(x) = am1 t + al log t + a0 + a1 / t + a2 / t^2 + ...
-        // satisfies A(left(x)) = A(x) - 1
-        // We compute it with KAbel + 2 coefficients am1, al, a0, ..., a{KAbel-1}
+        // Approximate Abel function A(x), satisfying A(left(x)) = A(x) - 1.
+        // With t = t(x) = x^{-gamma}, and N = KAbel-1, we use an asymptotic approximation
+        //      A(x) ≈ am1 t + al log t + a0 + a1 / t + a2 / t^2 + ... + aN / t^N
+        // which is valid for sufficiently large Re(t) and |t|
+        // with error O(N^{N+2} t^{N+1}).
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel(const var_t &x) const {
             var_t t = pow(x, -gamma_);
             Vector2<var_t> A = abel_t(t);
             return Vector2<var_t>(A(0), -gamma_ * (t / x) * A(1));
         }
-        template <typename var_t, typename coef_t> requires 
+        template <typename var_t, typename coef_t> requires
             (type_one_of<var_t, real_t, complex_t> && type_one_of<coef_t, VectorXr>) ||
             (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>) ||
             (type_one_of<var_t, interval_extra_t> && type_one_of<coef_t, VectorXix>)
         Vector2<var_t> abel_t(const var_t &t, const coef_t &coef) const {
             assert(coef.size() == KAbel_ + 2);
-            //std::cout << "called interval abel_t(" << t << ")\n";
             var_t A = coef(0) * t + coef(1) * log(t) + coef(2),
                   dA = coef(0) + coef(1) / t;
 
@@ -354,6 +396,9 @@ class LSV {
                 A += coef(2 + j) * tj;
                 tj *= ti;
                 dA -= var_t(j) * coef(2 + j) * tj;
+            }
+            if constexpr (type_one_of<var_t, interval_t, interval_extra_t, complex_interval_t>) {
+                A += abel_t_error(t);
             }
             return Vector2<var_t>(A, dA);
         }
@@ -397,7 +442,6 @@ class LSV {
         }
         // * complex interval version
         Vector2ci abel_t_inv(const complex_interval_t &a) const {
-            //std::cout << "called abel_t_inv(" << a << ")\n";
             auto m = [] (complex_interval_t x) {
                 using bmp::median;
                 return complex_interval_t(median(x.real()), median(x.imag()));
@@ -417,7 +461,6 @@ class LSV {
         }
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel_inv(const var_t &a) const {
-            //std::cout << "called abel_inv(" << a << ")\n";
             Vector2<var_t> Ai = abel_t_inv(a);
             const var_t & t = Ai(0), dAt = Ai(1);
             var_t x = pow(t, var_t(-1 / gamma_));
@@ -460,7 +503,7 @@ void LSV<PREC>::compute_abel_coef() {
         // brute force solve lower triangular matrix
         // instead of using Eigen that can fail in interval arithmetic:
         //VectorXi x = abel_matrix().template triangularView<Eigen::Lower>().solve(b);
-        
+
         VectorXix xx(KAbel_ + 1);
         for (int k = 0; k < KAbel_ + 1; k++) {
             interval_extra_t s = 0;
@@ -469,7 +512,7 @@ void LSV<PREC>::compute_abel_coef() {
             }
             xx(k) = (b(k) - s) / A(k,k);
         }
-        
+
         //VectorXi x = interval_root_ns::linear_krawczyk(A, b);
 
         x_coef(0) = xx(0);

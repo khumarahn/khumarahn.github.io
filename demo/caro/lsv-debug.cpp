@@ -48,7 +48,6 @@ int main() {
         cout << "gamma: " << gamma << "\n";
         lsv.set_gamma(gamma);
 
-        cout << "abel(1): " << lsv.abel(interval_t(1)) << "\n";
         // Look at the coefficients of the Abel function
         {
             real_t err = 0;
