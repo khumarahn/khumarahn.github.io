@@ -156,7 +156,16 @@ Vector2i<d10> interval_newton(const f_t &f, const interval_t<d10> &guess) {
     return V2i_t(Y, 1 / P);
 }
 
-// Krawczyk for a complex function
+// Krawczyk method for a complex function complex_krawczyk(f, guess).
+// Here f is a function
+//      complex_interval_t -> Vector2<complex_interval_t>
+// where the 0th component of the vector is the function value,
+// and the 1st component is the derivative.
+//
+// guess is an interval containing a root.
+//
+// We terminate when the interval stops changing. We return the solution
+// and the inverse derivative.
 template <unsigned d10, typename f_t>
 Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &guess) {
     using c_t = complex_t<d10>;
@@ -165,9 +174,8 @@ Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &gue
 
     ci_t X = guess;
 
-    int k;
     V2ci_t fX;
-    for (k = 0; k < 1024; k++) {
+    for (;;) {
         fX = f(X);
         ci_t y = median(X),
              Z = X - y,
@@ -185,14 +193,14 @@ Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &gue
         X = XX;
     }
 
-    assert(k < 64);
     assert(subset(ci_t(0), fX(0)));
-    //assert(width(X) < real_eps_sqrt_);
 
     return V2ci_t(X, ci_t(1) / fX(1));
 }
 
 // Krawczyk method for solving a real linear equation Ax = b
+//
+// We terminate when the interval stops changing.
 template <unsigned d10>
 VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     using r_t = real_t<d10>;
@@ -244,7 +252,7 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     // check that the initial interval X makes sense
     assert(subset(b, Vi_t(A * X)));
 
-    for (int k = 0; k < 1024; k++) {
+    for (;;) {
         Vi_t XX = Y * b + E * X;
 
         X = intersect(X, XX);
@@ -253,8 +261,6 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
             break;
         }
         X = XX;
-
-        assert(k < 64);
     }
 
     //std::cout << "Linear Kraw, error norm: " << norm(A * X - b) << "\n";

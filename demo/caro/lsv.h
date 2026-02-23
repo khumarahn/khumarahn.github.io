@@ -22,8 +22,8 @@ namespace lsv_ns {
 
 namespace bmp = boost::multiprecision;
 
-template <typename T, typename var_t>
-concept real_or_complex = std::is_same_v<T, var_t> || std::is_same_v<T, std::complex<var_t>>;
+template <typename T, typename... TArgs>
+concept type_one_of = (std::same_as<T, TArgs> || ...);
 
 using std::pow;
 using std::log;
@@ -88,9 +88,7 @@ class LSV {
         VectorXr  abel_coef_ni_;
 
         void compute_abel_coef();
-    public: // TEMPORARY
         MatrixXix abel_matrix() const;
-    private: // REMOVE
 
         // make public for debug
         static constexpr int PREC_ = PREC;
@@ -175,9 +173,10 @@ class LSV {
         VectorXi abel_coef() const { return abel_coef_; };
 
         // branches
-        Vector2i left(const interval_t &x) const {
-            interval_t t = pow(2 * x, gamma_);
-            return Vector2i(x * (1 + t), 1 + (gamma_ + 1) * t);
+        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
+        Vector2<i_t> left(const i_t &x) const {
+            i_t t = pow(2 * x, gamma_);
+            return Vector2<i_t>(x * (1 + t), 1 + (gamma_ + 1) * t);
         }
         Vector2i right(const interval_t &x) const {
             return Vector2i(2 * x - 1, 2);
@@ -189,21 +188,22 @@ class LSV {
         }
 
         // inverses
-        Vector2i left_inv(const interval_t &x) const {
+        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
+        Vector2<i_t> left_inv(const i_t &x) const {
             // max derivative is
-            interval_t md = left(0.5)(1);
+            i_t md = left(i_t(0.5))(1);
             // an interval enclosing the root
-            interval_t guess(x / md, x);
+            i_t guess(x / md, x);
 
-            auto f = [this, &x] (const interval_t &z) {
-                Vector2i r = left(z);
+            auto f = [this, &x] (const i_t &z) {
+                Vector2<i_t> r = left(z);
                 r(0) -= x;
                 return r;
             };
             return interval_root_ns::interval_newton(f, guess);
         }
 
-        template <real_or_complex<interval_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> right_inv(const var_t &x) const {
             return Vector2<var_t>((x + var_t(1)) / var_t(2), 0.5);
         }
@@ -246,7 +246,7 @@ class LSV {
             assert(x_nodes.size() == N_);
 
             MatrixXi L_values(N_, N_);
-//#pragma omp parallel for shared(L_values)
+#pragma omp parallel for shared(L_values)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes[ix];
                 VectorXi r = VectorXi::Zero(N_);
@@ -332,56 +332,43 @@ class LSV {
         // A(x) = am1 t + al log t + a0 + a1 / t + a2 / t^2 + ...
         // satisfies A(left(x)) = A(x) - 1
         // We compute it with KAbel + 2 coefficients am1, al, a0, ..., a{KAbel-1}
-        template <real_or_complex<interval_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel(const var_t &x) const {
             var_t t = pow(x, -gamma_);
             Vector2<var_t> A = abel_t(t);
             return Vector2<var_t>(A(0), -gamma_ * (t / x) * A(1));
         }
-        template <real_or_complex<interval_t> var_t>
-        Vector2<var_t> abel_t(const var_t &t) const {
+        template <typename var_t, typename coef_t> requires 
+            (type_one_of<var_t, real_t, complex_t> && type_one_of<coef_t, VectorXr>) ||
+            (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>) ||
+            (type_one_of<var_t, interval_extra_t> && type_one_of<coef_t, VectorXix>)
+        Vector2<var_t> abel_t(const var_t &t, const coef_t &coef) const {
+            assert(coef.size() == KAbel_ + 2);
             //std::cout << "called interval abel_t(" << t << ")\n";
-            var_t A = abel_coef_(0) * t + abel_coef_(1) * log(t) + abel_coef_(2),
-                  dA = abel_coef_(0) + abel_coef_(1) / t;
+            var_t A = coef(0) * t + coef(1) * log(t) + coef(2),
+                  dA = coef(0) + coef(1) / t;
 
             const var_t ti = var_t(1) / t;
             var_t tj = ti;
             for (int j = 1; j <= KAbel_ - 1; j++) {
-                A += abel_coef_(2 + j) * tj;
-                if (0) if constexpr (std::is_same_v<var_t, complex_interval_t>) {
-                    std::cout << "    in interval abel_t: increment: " << abel_coef_(2 + j) * tj
-                        << " of width: " << bmp::width((abel_coef_(2 + j) * tj).real())
-                        << " x " << bmp::width((abel_coef_(2 + j) * tj).imag())
-                        << "\n";
-                } else if constexpr (std::is_same_v<var_t, interval_t>) {
-                    std::cout << "    in interval abel_t: increment: " << abel_coef_(2 + j) * tj
-                        << " of width: " << bmp::width(interval_t(abel_coef_(2 + j) * tj))
-                        << "\n";
-                }
+                A += coef(2 + j) * tj;
                 tj *= ti;
-                dA -= var_t(j) * abel_coef_(2 + j) * tj;
+                dA -= var_t(j) * coef(2 + j) * tj;
             }
             return Vector2<var_t>(A, dA);
         }
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         Vector2<var_t> abel_t(const var_t &t) const {
-            //std::cout << "called abel_t(" << t << ")\n";
-            var_t A = abel_coef_ni_(0) * t + abel_coef_ni_(1) * log(t) + abel_coef_ni_(2),
-                  dA = abel_coef_ni_(0) + abel_coef_ni_(1) / t;
-
-            const var_t ti = var_t(1) / t;
-            var_t tj = ti;
-            for (int j = 1; j <= KAbel_ - 1; j++) {
-                A += abel_coef_ni_(2 + j) * tj;
-                tj *= ti;
-                dA -= var_t(j) * abel_coef_ni_(2 + j) * tj;
-            }
-            return Vector2<var_t>(A, dA);
+            return abel_t(t, abel_coef_ni_);
+        }
+        template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
+        Vector2<var_t> abel_t(const var_t &t) const {
+            return abel_t(t, abel_coef_);
         }
 
         // inverse
         // * non-interval version, Newton method
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         Vector2<var_t> abel_t_inv(const var_t &a) const {
             var_t t = a / abel_coef_ni_(0);
             Vector2<var_t> A;
@@ -428,7 +415,7 @@ class LSV {
             };
             return interval_root_ns::complex_krawczyk(f, guess);
         }
-        template <real_or_complex<interval_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel_inv(const var_t &a) const {
             //std::cout << "called abel_inv(" << a << ")\n";
             Vector2<var_t> Ai = abel_t_inv(a);
@@ -458,6 +445,10 @@ class LSV {
 template <int PREC>
 void LSV<PREC>::compute_abel_coef() {
     abel_coef_.resize(KAbel_ + 2);
+    abel_coef_ni_.resize(KAbel_ + 2);
+
+    // We do the computation in extra precision first, then dumb it down
+    VectorXix x_coef(KAbel_ + 2);
 
     // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
     {
@@ -481,33 +472,33 @@ void LSV<PREC>::compute_abel_coef() {
         
         //VectorXi x = interval_root_ns::linear_krawczyk(A, b);
 
-        abel_coef_(0) = interval_t(xx(0));
-        abel_coef_(1) = interval_t(xx(1));
-        for (int j = 2; j<=KAbel_; j++) {
-            abel_coef_(j+1) = interval_t(xx(j));
+        x_coef(0) = xx(0);
+        x_coef(1) = xx(1);
+        for (int j = 2; j <= KAbel_; j++) {
+            x_coef(j + 1) = xx(j);
         }
     }
 
     // Now set the constant term so that A(1) is approximately 0.
     // This is rather dubious: say, 1e+07 is approximately 0
     {
-        interval_t x = 1.0;
+        interval_extra_t x = 1;
         int NAbel = 5 * KAbel_;
         for (int i = 1; i <= NAbel; i++) {
             x = left_inv(x)(0);
         }
-        //
-        interval_t t = pow(x, -gamma_);
 
-        // now, A(t) = NAbel
-        abel_coef_(2) = 0;
-        abel_coef_(2) = NAbel - bmp::median(abel_t(t)(0));
+        interval_extra_t t = pow(x, -gamma_);
+
+        // now, we should have A(t) = NAbel
+        x_coef(2) = 0;
+        x_coef(2) = NAbel - bmp::median(abel_t(t, x_coef)(0));
     }
 
-    // populate the non-interval coefficients
-    abel_coef_ni_.resize(KAbel_ + 2);
-    for (int k = 0; k < KAbel_ + 1; k++) {
-        abel_coef_ni_(k) = bmp::median(abel_coef_(k));
+    // populate the coefficients
+    for (int k = 0; k <= KAbel_ + 1; k++) {
+        abel_coef_(k) = interval_t(x_coef(k));
+        abel_coef_ni_(k) = real_t(bmp::median(x_coef(k)));
     }
 }
 

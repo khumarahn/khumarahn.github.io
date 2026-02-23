@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 32;   // in bits
+const int PREC = 48;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -21,14 +21,14 @@ int main() {
     // real and interval types
     using real_t = LSV::real_t;
     using interval_t = LSV::interval_t;
-    using complex_interval_t = LSV::complex_interval_t;
+    //using complex_interval_t = LSV::complex_interval_t;
 
     // Matrix and vector types in interval arithmetic
     using MatrixXi = LSV::MatrixXi;
-    using MatrixXix = LSV::MatrixXix;
+    //using MatrixXix = LSV::MatrixXix;
     using MatrixXr = LSV::MatrixXr;
     using VectorXi = LSV::VectorXi;
-    using Vector2ci = LSV::Vector2ci;
+    //using Vector2ci = LSV::Vector2ci;
 
     const real_t real_eps = std::numeric_limits<real_t>::epsilon();
 
@@ -43,24 +43,6 @@ int main() {
             err += bmp::width(x);
         return err;
     };
-    auto uncertainty_x = [] (const MatrixXix &M) {
-        real_t err = 0;
-        for (const auto &x : M.reshaped())
-            err += real_t(bmp::width(x));
-        return err;
-    };
-
-    if (0) {
-        auto f = [] (complex_interval_t x) {
-            return Vector2ci(x * x - complex_interval_t(0,2), complex_interval_t(2) * x);
-        };
-
-        complex_interval_t guess(interval_t(0.75, 1.25), interval_t(0.75,1.25));
-
-            cout << "xxx: " << lsv.complex_krawczyk(f, guess)
-            << "\n";
-            return 0;
-    }
 
     for (real_t gamma = 0.75; gamma <= 0.75; gamma += 0.25) {
         cout << "gamma: " << gamma << "\n";
@@ -71,9 +53,6 @@ int main() {
         {
             real_t err = 0;
 
-            MatrixXix abel_mat = lsv.abel_matrix();
-            cout << "L1 error in Abel matrix: " << uncertainty_x(abel_mat) << "\n";
-
             VectorXi abel_coef = lsv.abel_coef();
             err = 0;
             for (int i=0; i<abel_coef.size(); i++) {
@@ -81,7 +60,7 @@ int main() {
             }
             cout << "L1 error in Abel coefficients: " << err << "\n";
 
-            cout << "Abel coeff: " << abel_coef.transpose() << "\n";
+            //cout << "Abel coeff: " << abel_coef.transpose() << "\n";
         }
 
         // Retrieve the transfer operator in interval form,
