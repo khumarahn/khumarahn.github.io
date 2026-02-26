@@ -98,22 +98,25 @@ class LSV {
         // error in Abel function
         interval_t R1_, rn_, d3d2rn_, R1rn_inv_;
 
+        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
+        bool abel_t_in_range(const i_t &t) const {
+            return (bmp::lower(t) >= R1_ && bmp::lower(t) >= R1rn_inv_);
+        }
+        bool abel_t_in_range(const complex_interval_t &t) const {
+            return (bmp::lower(t.real()) >= R1_ && bmp::lower(abs(t)) >= R1rn_inv_);
+        }
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
         i_t abel_t_error(const i_t &t) const {
+            if (!abel_t_in_range(t)) {
+                std::cout << "HUJ: " << R1_ << ", " << R1rn_inv_ << ", " << t << "\n";
+                assert(false);
+            }
 
             real_t factor = bmp::upper(d3d2rn_ * pow(interval_t(abs(t)), KAbel_));
 
             if constexpr (type_one_of<i_t, interval_t, interval_extra_t>) {
-                if (!(t >= R1_ && t >= R1rn_inv_)) {
-                    std::cout << " HUJ: " << R1_ << ", " << R1rn_inv_ << ", " << t << "\n";
-                }
-                assert(t >= R1_ && t >= R1rn_inv_);
                 return i_t(-factor, factor);
-            } else { // complex_interval_t
-                if (!(t.real() >= R1_ && abs(t) >= R1rn_inv_)) {
-                    std::cout << " HUJ: " << R1_ << ", " << R1rn_inv_ << ", " << t << "\n";
-                }
-                assert(t.real() >= R1_ && abs(t) >= R1rn_inv_);
+            } else {
                 return complex_interval_t(interval_t(-factor, factor), interval_t(-factor, factor));
             }
         }
@@ -128,6 +131,7 @@ class LSV {
         void set_gamma(const interval_t &gamma) {
             gamma_ = gamma;
 
+
             // Caro's BASIC CONSTANTS
             interval_t nu = 10,
                    Rad = interval_t(80) / interval_t(100);
@@ -135,9 +139,55 @@ class LSV {
             kappa_ = interval_t(1) / gamma_;
             mlogeps_ = log(interval_t(2)) * PREC_;
             N_ = int(ceil(mlogeps_ / Rad));
-            Nstar_ = int(ceil(nu + mlogeps_));
-            K_ = int(floor(((Nstar_ - nu) - 1) * 0.5));
             KAbel_ = int(ceil(mlogeps_));
+            { // error in Abel function
+                interval_t hhat1 = gamma_ * pow(2, gamma_);
+                int n = KAbel_ - 1;
+
+                // from abel_bounds.pdf
+                interval_t theta = 0.5, //arbitrary choice by Caroline?
+                           R = theta * pow((1 - theta) / 2, gamma_) * (1 + gamma_ * theta / (1 - theta)),
+                           G = gamma_ * pow(2, 2 * gamma_) / pow(1 - theta, 2) * (
+                                   0.5 * abs(gamma_ - 1) * max(pow(1 + theta, gamma_ - 2), pow(1 - theta, gamma_ - 2))
+                                   + gamma_ * max(pow(1 - theta, gamma_ - 1), pow(1 + theta, gamma_ - 1))
+                                   );
+                // Lemma 4.1
+                interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
+                           d2 = 1 + 2.5 * exp(interval_t(3) / 5) * (1 + 0.4 * G * pow(hhat1, -2)),
+                           d1 = (1 + G * pow(hhat1, -2)) / pow(d2, 2);
+
+                // Lemma 4.2
+                interval_t aleph = 0.05, // arbitrary choice by Alexey
+                           R1 = min(R, aleph * hhat1 / G);
+                // Lemma 4.3
+                interval_t delta = 0,
+                           barbeta = n + 2,
+                           gimel = pow(1 - aleph, -barbeta) * pow(hhat1, -delta - 1) * (
+                                   1 / (delta + 1) + 1 / (barbeta - delta - 1) + hhat1 / R1
+                                   );
+                // (24)
+                interval_t d3 = gimel * d2;
+                R1_ = R1;
+                rn_ = rn;
+                d3d2rn_ = d3 * pow(d2 / rn, n + 2);
+                R1rn_inv_ = 1 / min(R1, rn);
+                std::cout << "\n\nError constants for Abel function:\n"
+                    << "R1: " << R1_ << ", gimel: " << gimel
+                    << "\nd3: " << d3 << ", d2: " << d2 << ", rn: " << rn_
+                    << ", d2/rn: " << d2 / rn
+                    << "\n    d3d2rn: " << d3d2rn_
+                    << ", R1rn_inv: " << R1rn_inv_ << "\n";
+            }
+            { // set Nstar empirically, instead of
+              // Nstar_ = int(ceil(nu + mlogeps_));
+                interval_t x = 1, t = 1;
+                for (Nstar_ = 0; !abel_t_in_range(t); Nstar_++) {
+                    x = left_inv(x)(0);
+                    t = pow(x, -gamma_);
+                }
+                std::cout << "Nstar_: " << Nstar_ << "\n";
+            }
+            K_ = int(floor(((Nstar_ - nu) - 1) * 0.5));
             halfM_ = K_;
             M_ = 2 * halfM_;
             tau_ = (Nstar_ - nu) * exp(-interval_t(1));
@@ -173,40 +223,6 @@ class LSV {
                        integralccweights_(m, p) = integralccpoints_(m, p) * 2 * W_ * cc.weights()(m);
                    }
                }
-            }
-            { // error in Abel function
-                interval_t hhat1 = gamma_ * pow(2, gamma_);
-                int n = KAbel_ - 1;
-
-                // from abel_bounds.pdf
-                interval_t theta = 0.5, //arbitrary choice by Caroline?
-                           R = theta * pow((1 - theta) / 2, gamma_) * (1 + gamma_ * theta / (1 - theta)),
-                           G = gamma_ * pow(2, 2 * gamma_) / pow(1 - theta, 2) * (
-                                   0.5 * abs(gamma_ - 1) * max(pow(1 + theta, gamma_ - 2), pow(1 - theta, gamma_ - 2))
-                                   + gamma_ * max(pow(1 - theta, gamma_ - 1), pow(1 + theta, gamma_ - 1))
-                                   );
-                // Lemma 4.1
-                interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
-                           d2 = 1 + 2.5 * exp(interval_t(3) / 5) * (1 + 0.4 * G * pow(hhat1, -2)),
-                           d1 = (1 + G * pow(hhat1, -2)) / pow(d2, 2);
-
-                // Lemma 4.2
-                interval_t aleph = 0.5, // arbitrary choice by Alexey
-                           R1 = min(R, aleph * hhat1 / G);
-                // Lemma 4.3
-                interval_t delta = 0,
-                           barbeta = n + 2,
-                           gimel = pow(1 - aleph, -barbeta) * pow(hhat1, -delta - 1) * (
-                                   1 / (delta + 1) + 1 / (barbeta - delta - 1) + hhat1 / R1
-                                   );
-                // (24)
-                interval_t d3 = gimel * d2;
-                R1_ = R1;
-                rn_ = rn;
-                d3d2rn_ = d3 * pow(d2 / rn, n + 2);
-                R1rn_inv_ = 1 / min(R1, rn);
-                std::cout << "R1: " << R1_ << ", rn: " << rn_ << ", d3d2rn: " << d3d2rn_
-                    << ", R1rn_inv: " << R1rn_inv_ << "\n";
             }
 
             compute_abel_coef();
@@ -293,7 +309,7 @@ class LSV {
             assert(x_nodes.size() == N_);
 
             MatrixXi L_values(N_, N_);
-#pragma omp parallel for shared(L_values)
+//#pragma omp parallel for shared(L_values)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes[ix];
                 VectorXi r = VectorXi::Zero(N_);
@@ -331,6 +347,9 @@ class LSV {
                 Vector2i Av0xn = abel(v0xn);
                 interval_t Ax = Av0xn(0) - Nstar_,
                            dAx = Av0xn(1) * dv0xn;
+                std::cout << "v0xn: " << v0xn << ", " << dv0xn
+                    << ", Av0xn: " << Av0xn.transpose()
+                    << ", Ax: " << Ax << ", dAx: " << dAx << "\n";
 
                 // add the derivatives (all in one go)
                 for (int m = 0; m < halfM_; m++) {
@@ -523,19 +542,18 @@ void LSV<PREC>::compute_abel_coef() {
     }
 
     // Now set the constant term so that A(1) is approximately 0.
-    // This is rather dubious: say, 1e+07 is approximately 0
+    // Not trying to control the accuracy
     {
         interval_extra_t x = 1;
-        int NAbel = 5 * KAbel_;
-        for (int i = 1; i <= NAbel; i++) {
+        for (int i=0; i<Nstar_; i++) {
             x = left_inv(x)(0);
         }
 
         interval_extra_t t = pow(x, -gamma_);
 
-        // now, we should have A(t) = NAbel
+        // now, we should have A(t) = Nstar_
         x_coef(2) = 0;
-        x_coef(2) = NAbel - bmp::median(abel_t(t, x_coef)(0));
+        x_coef(2) = Nstar_ - bmp::median(abel_t(t, x_coef)(0));
     }
 
     // populate the coefficients
