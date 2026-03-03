@@ -3,8 +3,6 @@
 #include <Eigen/Core>
 #include <cmath> // for cos for standard types
 
-using std::cos;
-
 // loosely translated from Julia's QuadratureRules
 template <typename real_t>
 class ClenshawCurtisQuadrature {
@@ -15,6 +13,8 @@ class ClenshawCurtisQuadrature {
         VectorXr nodes_, weights_;
     public:
         ClenshawCurtisQuadrature(int s) {
+            using std::cos;
+
             auto b = [](int j, int n) { return (n == 2 * j) ? 1 : 2; };
             auto c = [](int k, int n) -> real_t { return (k % n == 0) ? 1 : 2; };
             auto theta = [](int k, int n) { return (2 * pi_ * k ) / n; };
@@ -32,10 +32,12 @@ class ClenshawCurtisQuadrature {
 
             nodes_.resize(s);
             weights_.resize(s);
-            real_t si = 1 / real_t(s - 1);
+            const real_t si = 1 / real_t(s - 1);
+            const real_t pisi = pi_ * si;
+#pragma omp parallel for schedule(dynamic)
             for (int k = 0; k < s; k++) {
-                nodes_(k) = (1 - cos(pi_ * k * si)) / 2 ;
-                weights_(k) = ccsum(k, s-1);
+                nodes_(k) = (1 - cos(pisi * k)) / 2 ;
+                weights_(k) = ccsum(k, s - 1);
             }
         }
         VectorXr nodes() const { return nodes_; }

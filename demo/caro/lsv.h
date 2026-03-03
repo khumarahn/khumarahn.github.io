@@ -12,6 +12,10 @@
 #include <boost/multiprecision/detail/default_ops.hpp>
 #include <boost/multiprecision/eigen.hpp>
 
+// for arbitrary precision integers (for Bernoulli)
+#include <boost/multiprecision/gmp.hpp>
+
+
 #include "clenshawcurtis.h"
 #include "cheb.h"
 #include "interval-root.h"
@@ -95,15 +99,15 @@ class LSV {
         interval_t kappa_, mlogeps_, tau_, W_;
         int N_, Nstar_, K_, KAbel_, halfM_, M_, Mhat_, P_;
 
-        // error in Abel function
-        interval_t R1_, rn_, d3d2rn_, R1rn_inv_;
+        // Error in Abel function
+        interval_t R1_, R1_inv_, rn_, d3d2rn_, R1rn_inv_;
 
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
         bool abel_t_in_range(const i_t &t) const {
-            return (bmp::lower(t) >= R1_ && bmp::lower(t) >= R1rn_inv_);
+            return (bmp::lower(t) >= bmp::upper(R1_inv_) && bmp::lower(t) >= bmp::upper(R1rn_inv_));
         }
         bool abel_t_in_range(const complex_interval_t &t) const {
-            return (bmp::lower(t.real()) >= R1_ && bmp::lower(abs(t)) >= R1rn_inv_);
+            return (bmp::lower(t.real()) >= bmp::upper(R1_inv_) && bmp::lower(abs(t)) >= bmp::upper(R1rn_inv_));
         }
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
         i_t abel_t_error(const i_t &t) const {
@@ -112,7 +116,7 @@ class LSV {
                 assert(false);
             }
 
-            real_t factor = bmp::upper(d3d2rn_ * pow(interval_t(abs(t)), KAbel_));
+            real_t factor = bmp::upper(d3d2rn_ * pow(interval_t(abs(t)), - KAbel_));
 
             if constexpr (type_one_of<i_t, interval_t, interval_extra_t>) {
                 return i_t(-factor, factor);
@@ -124,9 +128,127 @@ class LSV {
         VectorXci taylorpoints_, taylorpointweights_;
         MatrixXi integralccpoints_, integralccweights_;
 
+        void compute_integral_derivative_weights() {
+            // check that required constants are set
+            assert(halfM_ > 0 && Nstar_ > 0 && tau_ > 0 && M_ > 0 && K_ > 0 && P_ > 0 && W_ > 0);
+
+            {  // derivatives
+                std::cout << "Computing derivatives, halfM_: " << halfM_ << "...\n";
+                taylorpoints_.resize(halfM_);
+                for (int k = 0; k < halfM_; k++)
+                    taylorpoints_(k) = complex_interval_t(Nstar_, 0)
+                        + tau_ * exp(complex_interval_t(0, (2 * k + 1) * pi_ / M_));
+                MatrixXci FFTweights(halfM_, K_);
+#pragma omp parallel for collapse(2) schedule(dynamic)
+                for (int m = 0; m < halfM_; m++)
+                    for (int k = 0; k < K_; k++)
+                        FFTweights(m, k) =
+                            exp(complex_interval_t(0, - (pi_ * (2 * k + 1) * (2 * m + 1)) / M_))
+                            / complex_interval_t(halfM_);
+                std::cout << "   ... computing bernoulli2k(" << K_ << ") ...\n";
+                VectorXi EMderivativeweights = -bernoulli2k(K_).tail(K_);
+                std::cout << "   ... bernoulli2k done ...\n";
+                for (int k = 0; k < K_; k++)
+                    EMderivativeweights(k) /= pow(tau_, 2*k + 1) * 2 * (k + 1);
+                taylorpointweights_ = FFTweights * EMderivativeweights;
+                { // DEBUG
+                    std::cout << "error in taylor point weights: " << uncertainty_c(taylorpointweights_) << "\n"
+                        << "error in FFTweights: " << uncertainty_c(FFTweights) << "\n"
+                        << "error in EMderivativeweights: " << uncertainty_c(EMderivativeweights) << "\n"
+                        << "error in bernoulli: " << uncertainty_c(bernoulli2k(K_)) << "\n";
+                }
+                std::cout << "   ... done\n";
+            }
+
+            {  // integral
+                std::cout << "Computing integral...\n";
+                std::cout << "   ... computing CCQ(" << Mhat_ << ") ...\n";
+                ClenshawCurtisQuadrature<interval_t> cc(Mhat_);
+                std::cout << "   ... computing weights...\n";
+                integralccpoints_.resize(Mhat_, P_);
+                integralccweights_.resize(Mhat_, P_);
+#pragma omp parallel for collapse(2) schedule(dynamic)
+                for (int m = 0; m < Mhat_; m++) {
+                    for (int p = 0; p < P_; p++) {
+                        integralccpoints_(m, p) = Nstar_ * exp(2 * W_ * (cc.nodes()(m) + p));
+                        integralccweights_(m, p) = integralccpoints_(m, p) * 2 * W_ * cc.weights()(m);
+                    }
+                }
+                std::cout << "   ... done\n";
+            }
+
+            return;
+        }
+
+        // set R1_, R1_inv_, rn_, d3d2rn_, R1rn_inv_
+        void compute_abel_error_constants() {
+            // check if required constants are set
+            assert(KAbel_ > 0);
+
+            interval_t hhat1 = gamma_ * pow(2, gamma_);
+            int n = KAbel_ - 1;
+
+            // from abel_bounds.pdf
+            interval_t theta = 0.5, //arbitrary choice by Caroline?
+                       R = theta * pow((1 - theta) / 2, gamma_) * (1 + gamma_ * theta / (1 - theta)),
+                       G = gamma_ * pow(2, 2 * gamma_) / pow(1 - theta, 2) * (
+                               0.5 * abs(gamma_ - 1) * max(pow(1 + theta, gamma_ - 2), pow(1 - theta, gamma_ - 2))
+                               + gamma_ * max(pow(1 - theta, gamma_ - 1), pow(1 + theta, gamma_ - 1))
+                               );
+            // Lemma 4.1, Caroline's version
+            //interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
+            //           d2 = 1 + 2.5 * exp(interval_t(3) / 5) * (1 + 0.4 * G * pow(hhat1, -2)),
+            //           d1 = (1 + G * pow(hhat1, -2)) / pow(d2, 2);
+
+            // Lemma 4.1, Yutong's version
+            interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
+                       d2 = 1 + 2.5 * (exp(interval_t(3) / 5) - 1) * (1 + sqrt(0.4 * G * pow(hhat1, -2))),
+                       d1 = (1 + G * pow(hhat1, -2)) / d2 * (0.4 - log(1 - 0.4));
+
+            // Lemma 4.2
+            interval_t aleph = 0.5, // arbitrary choice by Alexey
+                       R1 = min(R, aleph * hhat1 / G);
+            // Lemma 4.3
+            interval_t delta = 0,
+                       barbeta = n + 2,
+                       gimel = pow(1 - aleph, -barbeta) * pow(hhat1, -delta - 1) * (
+                               1 / (delta + 1) + 1 / (barbeta - delta - 1) + hhat1 / R1
+                               );
+            // (24)
+            interval_t d3 = gimel * d2;
+            R1_ = R1;
+            R1_inv_ = 1 / R1;
+            rn_ = rn;
+            d3d2rn_ = d3 * pow(d2 / rn, n + 2);
+            R1rn_inv_ = 1 / min(R1, rn);
+
+            std::cout << "\n\nError constants for Abel function:\n"
+                << "R1: " << R1_ << ", gimel: " << gimel
+                << "\nd3: " << d3 << ", d2: " << d2 << ", rn: " << rn_
+                << ", d2/rn: " << d2 / rn
+                << "\n    d3d2rn: " << d3d2rn_
+                << ", R1rn_inv: " << R1rn_inv_ << "\n";
+
+            return;
+        }
     public:
+        // DEBUG!
+        real_t uncertainty(const MatrixXi &X) const {
+            real_t a = 0;
+            for (const auto &x : X.reshaped())
+                a += bmp::width(x);
+            return a;
+        }
+        real_t uncertainty_c(const MatrixXci &X) const {
+            real_t a = 0;
+            for (const auto &x : X.reshaped())
+                a += bmp::width(x.real()) + bmp::width(x.imag());
+            return a;
+        }
+
         LSV(const interval_t &gamma = 1) {
-            set_gamma(gamma);
+            // DEBUG debug commented temporary temporarily FIXME:
+            //set_gamma(gamma);
         }
         void set_gamma(const interval_t &gamma) {
             gamma_ = gamma;
@@ -140,50 +262,18 @@ class LSV {
             mlogeps_ = log(interval_t(2)) * PREC_;
             N_ = int(ceil(mlogeps_ / Rad));
             KAbel_ = int(ceil(mlogeps_));
-            { // error in Abel function
-                interval_t hhat1 = gamma_ * pow(2, gamma_);
-                int n = KAbel_ - 1;
 
-                // from abel_bounds.pdf
-                interval_t theta = 0.5, //arbitrary choice by Caroline?
-                           R = theta * pow((1 - theta) / 2, gamma_) * (1 + gamma_ * theta / (1 - theta)),
-                           G = gamma_ * pow(2, 2 * gamma_) / pow(1 - theta, 2) * (
-                                   0.5 * abs(gamma_ - 1) * max(pow(1 + theta, gamma_ - 2), pow(1 - theta, gamma_ - 2))
-                                   + gamma_ * max(pow(1 - theta, gamma_ - 1), pow(1 + theta, gamma_ - 1))
-                                   );
-                // Lemma 4.1
-                interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
-                           d2 = 1 + 2.5 * exp(interval_t(3) / 5) * (1 + 0.4 * G * pow(hhat1, -2)),
-                           d1 = (1 + G * pow(hhat1, -2)) / pow(d2, 2);
+            compute_abel_error_constants();
 
-                // Lemma 4.2
-                interval_t aleph = 0.05, // arbitrary choice by Alexey
-                           R1 = min(R, aleph * hhat1 / G);
-                // Lemma 4.3
-                interval_t delta = 0,
-                           barbeta = n + 2,
-                           gimel = pow(1 - aleph, -barbeta) * pow(hhat1, -delta - 1) * (
-                                   1 / (delta + 1) + 1 / (barbeta - delta - 1) + hhat1 / R1
-                                   );
-                // (24)
-                interval_t d3 = gimel * d2;
-                R1_ = R1;
-                rn_ = rn;
-                d3d2rn_ = d3 * pow(d2 / rn, n + 2);
-                R1rn_inv_ = 1 / min(R1, rn);
-                std::cout << "\n\nError constants for Abel function:\n"
-                    << "R1: " << R1_ << ", gimel: " << gimel
-                    << "\nd3: " << d3 << ", d2: " << d2 << ", rn: " << rn_
-                    << ", d2/rn: " << d2 / rn
-                    << "\n    d3d2rn: " << d3d2rn_
-                    << ", R1rn_inv: " << R1rn_inv_ << "\n";
-            }
             { // set Nstar empirically, instead of
               // Nstar_ = int(ceil(nu + mlogeps_));
                 interval_t x = 1, t = 1;
-                for (Nstar_ = 0; !abel_t_in_range(t); Nstar_++) {
+                for (Nstar_ = 0; ; Nstar_++) {
                     x = left_inv(x)(0);
                     t = pow(x, -gamma_);
+                    if (abel_t_in_range(t) && bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)) {
+                        break;
+                    }
                 }
                 std::cout << "Nstar_: " << Nstar_ << "\n";
             }
@@ -198,34 +288,12 @@ class LSV {
             W_ = 1;
             P_ = int(ceil(mlogeps_ / W_ / kappa_));
 
-            {  // derivatives
-                taylorpoints_.resize(halfM_);
-                for (int k = 0; k < halfM_; k++)
-                    taylorpoints_(k) = complex_interval_t(Nstar_, 0) + tau_ * exp(complex_interval_t(0, (2 * k + 1) * pi_ / M_));
-                MatrixXci FFTweights(halfM_, K_);
-                for (int m = 0; m < halfM_; m++)
-                    for (int k = 0; k < K_; k++)
-                        FFTweights(m, k) =
-                            exp(complex_interval_t(0, -pi_ * (2 * k + 1) * (2 * m + 1) / interval_t(M_))) / complex_interval_t(halfM_);
-                VectorXi EMderivativeweights = -bernoulli2k(K_).tail(K_);
-                for (int k = 0; k < K_; k++)
-                    EMderivativeweights(k) /= pow(tau_, 2*k + 1) * 2 * (k + 1);
-                taylorpointweights_ = FFTweights * EMderivativeweights;
-            }
+            compute_integral_derivative_weights();
 
-            {  // integral
-               ClenshawCurtisQuadrature<interval_t> cc(Mhat_);
-               integralccpoints_.resize(Mhat_, P_);
-               integralccweights_.resize(Mhat_, P_);
-               for (int m = 0; m < Mhat_; m++) {
-                   for (int p = 0; p < P_; p++) {
-                       integralccpoints_(m, p) = Nstar_ * exp(2 * W_ * (cc.nodes()(m) + p));
-                       integralccweights_(m, p) = integralccpoints_(m, p) * 2 * W_ * cc.weights()(m);
-                   }
-               }
-            }
-
+            std::cout << "Computing Abel function coeffs...\n";
             compute_abel_coef();
+            std::cout << "   ... done...\n";
+
         }
 
         int NCheb() const { return N_; };
@@ -309,7 +377,7 @@ class LSV {
             assert(x_nodes.size() == N_);
 
             MatrixXi L_values(N_, N_);
-//#pragma omp parallel for shared(L_values)
+#pragma omp parallel for shared(L_values)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes[ix];
                 VectorXi r = VectorXi::Zero(N_);
@@ -342,14 +410,19 @@ class LSV {
 
                 // 1/2 sum with the Nstar
                 r += evaluate_branch_real(v0xn, dv0xn, 0.5);
+                std::cout << "Accuracy at " << __LINE__ << ": " << uncertainty(r) << "\n";
 
                 // figure out Abel function of x and its derivative
                 Vector2i Av0xn = abel(v0xn);
                 interval_t Ax = Av0xn(0) - Nstar_,
                            dAx = Av0xn(1) * dv0xn;
-                std::cout << "v0xn: " << v0xn << ", " << dv0xn
-                    << ", Av0xn: " << Av0xn.transpose()
-                    << ", Ax: " << Ax << ", dAx: " << dAx << "\n";
+                if (false) {
+                    std::cout << "v0xn: " << v0xn << ", " << dv0xn
+                        << ", Av0xn: " << Av0xn.transpose()
+                        << ", Ax: " << Ax << ", dAx: " << dAx
+                        << "\n        *badness*: " << bmp::width(Ax) + bmp::width(dAx)
+                        << "\n";
+                }
 
                 // add the derivatives (all in one go)
                 for (int m = 0; m < halfM_; m++) {
@@ -359,8 +432,24 @@ class LSV {
                     Vector2ci Aixn = abel_inv(complex_interval_t(Ax) + n_cplx);
                     complex_interval_t dv0xn = dAx * Aixn(1);
 
+                    {
+                        auto ee = uncertainty_c(evaluate_branch_cplx(Aixn(0), dv0xn, weight));
+                        auto width = [] (const complex_interval_t &x) {
+                            return bmp::width(x.real()) + bmp::width(x.imag());
+                        };
+                        if (ee > 1) {
+                            std::cout << "Accuracy at " << __LINE__ << ": " << ee << "\n"
+                                << "Aixn(0): " << Aixn(0) << ", width: " << width(Aixn(0)) << "\n"
+                                << "dv0xn: " << dv0xn << ", width: " << width(dv0xn) << "\n"
+                                << "weight: " << weight << ", width: " << width(weight) << "\n";
+
+                            assert(false);
+                        }
+                    }
+
                     r += evaluate_branch_cplx(Aixn(0), dv0xn, weight).real();
                 }
+                std::cout << "Accuracy at " << __LINE__ << ": " << uncertainty(r) << "\n";
 
                 // do the integral, again as a linear combination of point evaluations
                 // we use an exp transformation plus Clenshaw-Curtis
@@ -372,6 +461,17 @@ class LSV {
                         Vector2i Aixn = abel_inv<interval_t>(Ax + n);
                         interval_t dv0xn = dAx * Aixn(1);
 
+                        {
+                            auto ee = uncertainty(evaluate_branch_real(Aixn(0), dv0xn, weight));
+                            if (ee > 1) {
+                                std::cout << "Accuracy at " << __LINE__ << ": " << ee << "\n"
+                                    << "Aixn(0): " << Aixn(0) << ", width: " << bmp::width(Aixn(0)) << "\n"
+                                    << "dv0xn: " << dv0xn << ", width: " << bmp::width(dv0xn) << "\n"
+                                    << "weight: " << weight << ", width: " << bmp::width(weight) << "\n";
+
+                                assert(false);
+                            }
+                        }
                         r += evaluate_branch_real(Aixn(0), dv0xn, weight);
                     }
                 }
@@ -488,16 +588,20 @@ class LSV {
 
         // Akiyama–Tanigawa algorithm for second Bernoulli numbers B+n
         static VectorXi bernoulli2k(int p) {
-            VectorXi B2(p+1),
-                     A(2*p+1);
-            interval_t fact = 1;
+            using int_t = bmp::mpz_int;
+            using VectorXint = Eigen::Matrix<int_t, Eigen::Dynamic, 1>;
+
+            VectorXi B2(p+1);
+            VectorXint A(2*p+1);
+
+            int_t fact = 1;
             for (int m = 0; m <= 2*p; m++) {
                 A(m) = fact;
                 fact *= m + 1;
                 for (int j = m; j >= 1; j--)
                     A(j - 1) = j * ((m + 1) * A(j - 1) - A(j));
                 if (m % 2 == 0)
-                    B2[m / 2] = A(0) / fact;
+                    B2[m / 2] = interval_t(A(0)) / interval_t(fact);
             }
             return B2;
         }
