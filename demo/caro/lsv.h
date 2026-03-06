@@ -598,14 +598,16 @@ class LSV {
 
 template <int PREC>
 void LSV<PREC>::compute_abel_stuff() {
+
+    using ix_t = interval_extra_t;
+
     abel_coef_.resize(KAbel_ + 2);
     abel_coef_ni_.resize(KAbel_ + 2);
 
     // We do the computation in extra precision first, then dumb it down
     VectorXix x_coef(KAbel_ + 2);
 
-    // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
-    {
+    { // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
         VectorXix b = VectorXix::Zero(KAbel_ + 1);
         b(0) = -1;
 
@@ -618,7 +620,7 @@ void LSV<PREC>::compute_abel_stuff() {
 
         VectorXix xx(KAbel_ + 1);
         for (int k = 0; k < KAbel_ + 1; k++) {
-            interval_extra_t s = 0;
+            ix_t s = 0;
             for (int j = 0; j < k; j++) {
                 s += A(k,j) * xx(j);
             }
@@ -636,32 +638,32 @@ void LSV<PREC>::compute_abel_stuff() {
     { // compute abel error constants
         int n = KAbel_ - 1;
 
-        interval_extra_t q = interval_t(1) / 2,
-                         b = pow(2, gamma_);
+        ix_t q = ix_t(1) / 2,
+             b = pow(2, gamma_);
 
-        interval_extra_t r = max(
-                bmp::upper(interval_extra_t(
+        ix_t r = max(
+                bmp::upper(ix_t(
                         b / q
                         )),
-                bmp::upper(interval_extra_t(
+                bmp::upper(ix_t(
                         2 * b * (gamma_ + 1) * (pow(1 - q, -gamma_) - 1) / (gamma_ * q)
                         )
                     ));
 
-        interval_extra_t R = (1 / r + 1 / b) / 2,
-                         bR = b * R;
+        ix_t R = (1 / r + 1 / b) / 2,
+             bR = b * R;
 
-        interval_extra_t B = 1
+        ix_t B = 1
             + abs(x_coef(0)) / R * (pow(1 - bR, -gamma_) + 1)
             - abs(x_coef(1)) * gamma_ * log(1 - bR);
         for (int k = 1; k <= n; k++) {
             B += abs(x_coef(2 + k)) * pow(R, k) * (pow(1 + bR, k * gamma_) + 1);
         }
 
-        interval_extra_t M = B / pow(R, n + 1);
+        ix_t M = B / pow(R, n + 1);
 
-        interval_extra_t I = sqrt(pi_) / 2
-            * bmp::tgamma(interval_extra_t(n) / 2) / bmp::tgamma(interval_extra_t(n + 1) / 2);
+        ix_t I = sqrt(pi_) / 2
+            * bmp::tgamma(ix_t(n) / 2) / bmp::tgamma(ix_t(n + 1) / 2);
 
         // OUTPUT:
         aerr_r_ = bmp::upper(interval_t(
@@ -676,7 +678,7 @@ void LSV<PREC>::compute_abel_stuff() {
 
     { // set Nstar empirically, instead of
       // Nstar_ = int(ceil(nu + mlogeps_));
-        interval_extra_t x = 1, t = 1;
+        ix_t x = 1, t = 1;
         for (Nstar_ = 0; ; Nstar_++) {
             x = left_inv(x)(0);
             t = pow(x, -gamma_);
@@ -687,15 +689,14 @@ void LSV<PREC>::compute_abel_stuff() {
         }
     }
 
-    // Now set the constant term so that A(1) is approximately 0.
-    // Not trying to control the accuracy
-    {
-        interval_extra_t x = 1;
+    { // Now set the constant term so that A(1) is approximately 0.
+      // Not trying to control the accuracy
+        ix_t x = 1;
         for (int i=0; i<Nstar_; i++) {
             x = left_inv(x)(0);
         }
 
-        interval_extra_t t = pow(x, -gamma_);
+        ix_t t = pow(x, -gamma_);
 
         // now, we should have A(t) = Nstar_
         x_coef(2) = 0;
@@ -716,24 +717,27 @@ LSV<PREC>::MatrixXix LSV<PREC>::abel_matrix() const {
     // * second column: coefficients of log(t(left(z)))
     // * 2+n column: coefficients of t(left(z))^{-k} - t^{-k}
     MatrixXix X = MatrixXix::Zero(KAbel_ + 1, KAbel_ + 1);
-    interval_extra_t twopowgamma_ = pow(2, interval_extra_t(gamma_)),
-                     c = - interval_extra_t(gamma_) * twopowgamma_;
+    const interval_extra_t g = gamma_, b = pow(2, g);
+    interval_extra_t c;
+
+    c = - g * b;
     for (int j = 0; j <= KAbel_; j++) {
         X(j,0) = c;
-        c *= twopowgamma_ * (-gamma_ - j - 1) / (j + 2);
+        c *= b * (-g - j - 1) / (j + 2);
     }
-    c = - gamma_ * twopowgamma_;
+    c = - g * b;
     for (int j = 1; j <= KAbel_; j++) {
         X(j,1) = c / j;
-        c *= -twopowgamma_;
+        c *= -b;
     }
     for (int k = 1; k <= KAbel_ - 1; k++) {
         c = 1;
         for (int j = k + 1; j <= KAbel_; j++) {
-            c *= (k * gamma_ - j + k + 1) * twopowgamma_ / (j - k);
+            c *= (k * g - j + k + 1) * b / (j - k);
             X(j, k+1) = c;
         }
     }
+
     return X;
 }
 
