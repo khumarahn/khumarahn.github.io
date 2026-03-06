@@ -92,7 +92,7 @@ class LSV {
         VectorXi abel_coef_;
         VectorXr  abel_coef_ni_;
 
-        void compute_abel_coef();
+        void compute_abel_stuff();
         MatrixXix abel_matrix() const;
 
         static constexpr int PREC_ = PREC;
@@ -100,28 +100,44 @@ class LSV {
         int N_, Nstar_, K_, KAbel_, halfM_, M_, Mhat_, P_;
 
         // Error in Abel function
-        interval_t R1_, R1_inv_, rn_, d3d2rn_, R1rn_inv_;
+        //interval_t R1_, R1_inv_, rn_, d3d2rn_, R1rn_inv_;
+        real_t aerr_r_, aerr_C_;
 
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
         bool abel_t_in_range(const i_t &t) const {
-            return (bmp::lower(t) >= bmp::upper(R1_inv_) && bmp::lower(t) >= bmp::upper(R1rn_inv_));
+            return bmp::lower(t) >= aerr_r_;
         }
         bool abel_t_in_range(const complex_interval_t &t) const {
-            return (bmp::lower(t.real()) >= bmp::upper(R1_inv_) && bmp::lower(abs(t)) >= bmp::upper(R1rn_inv_));
+            return bmp::lower(t.real()) >= aerr_r_;
         }
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
         i_t abel_t_error(const i_t &t) const {
+
+            // ir_t is the underlying real interval type
+            using ir_t = std::conditional<type_one_of<i_t,complex_interval_t>,
+                  interval_t,
+                  i_t>::type;
+
             if (!abel_t_in_range(t)) {
-                std::cout << "HUJ: " << R1_ << ", " << R1rn_inv_ << ", " << t << "\n";
                 assert(false);
             }
 
-            real_t factor = bmp::upper(d3d2rn_ * pow(interval_t(abs(t)), - KAbel_));
+            const int n = KAbel_ - 1;
+            ir_t factor = aerr_C_ * pow(abs(t), -n),
+                 window (-bmp::upper(factor), bmp::upper(factor));
 
-            if constexpr (type_one_of<i_t, interval_t, interval_extra_t>) {
-                return i_t(-factor, factor);
+            //DEBUG
+            {
+                if (factor > 1) {
+                    std::cout << "PIZDA!! t: " << t << ", factor: " << factor << "\n";
+                    std::cout << "n: " << n << ", aerr_C_: " << aerr_C_ << "\n";
+                }
+            }
+
+            if constexpr (type_one_of<i_t, complex_interval_t>) {
+                return complex_interval_t(window, window);
             } else {
-                return complex_interval_t(interval_t(-factor, factor), interval_t(-factor, factor));
+                return window;
             }
         }
 
@@ -180,57 +196,6 @@ class LSV {
             return;
         }
 
-        // set R1_, R1_inv_, rn_, d3d2rn_, R1rn_inv_
-        void compute_abel_error_constants() {
-            // check if required constants are set
-            assert(KAbel_ > 0);
-
-            interval_t hhat1 = gamma_ * pow(2, gamma_);
-            int n = KAbel_ - 1;
-
-            // from abel_bounds.pdf
-            interval_t theta = 0.5, //arbitrary choice by Caroline?
-                       R = theta * pow((1 - theta) / 2, gamma_) * (1 + gamma_ * theta / (1 - theta)),
-                       G = gamma_ * pow(2, 2 * gamma_) / pow(1 - theta, 2) * (
-                               0.5 * abs(gamma_ - 1) * max(pow(1 + theta, gamma_ - 2), pow(1 - theta, gamma_ - 2))
-                               + gamma_ * max(pow(1 - theta, gamma_ - 1), pow(1 + theta, gamma_ - 1))
-                               );
-            // Lemma 4.1, Caroline's version
-            //interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
-            //           d2 = 1 + 2.5 * exp(interval_t(3) / 5) * (1 + 0.4 * G * pow(hhat1, -2)),
-            //           d1 = (1 + G * pow(hhat1, -2)) / pow(d2, 2);
-
-            // Lemma 4.1, Yutong's version
-            interval_t rn = min(R, 0.4 / (hhat1 + sqrt(0.4 * G))) / n,
-                       d2 = 1 + 2.5 * (exp(interval_t(3) / 5) - 1) * (1 + sqrt(0.4 * G * pow(hhat1, -2))),
-                       d1 = (1 + G * pow(hhat1, -2)) / d2 * (0.4 - log(1 - 0.4));
-
-            // Lemma 4.2
-            interval_t aleph = 0.5, // arbitrary choice by Alexey
-                       R1 = min(R, aleph * hhat1 / G);
-            // Lemma 4.3
-            interval_t delta = 0,
-                       barbeta = n + 2,
-                       gimel = pow(1 - aleph, -barbeta) * pow(hhat1, -delta - 1) * (
-                               1 / (delta + 1) + 1 / (barbeta - delta - 1) + hhat1 / R1
-                               );
-            // (24)
-            interval_t d3 = gimel * d2;
-            R1_ = R1;
-            R1_inv_ = 1 / R1;
-            rn_ = rn;
-            d3d2rn_ = d3 * pow(d2 / rn, n + 2);
-            R1rn_inv_ = 1 / min(R1, rn);
-
-            std::cout << "\n\nError constants for Abel function:\n"
-                << "R1: " << R1_ << ", gimel: " << gimel
-                << "\nd3: " << d3 << ", d2: " << d2 << ", rn: " << rn_
-                << ", d2/rn: " << d2 / rn
-                << "\n    d3d2rn: " << d3d2rn_
-                << ", R1rn_inv: " << R1rn_inv_ << "\n";
-
-            return;
-        }
     public:
         // DEBUG!
         real_t uncertainty(const MatrixXi &X) const {
@@ -253,7 +218,6 @@ class LSV {
         void set_gamma(const interval_t &gamma) {
             gamma_ = gamma;
 
-
             // Caro's BASIC CONSTANTS
             interval_t nu = 10,
                    Rad = interval_t(80) / interval_t(100);
@@ -263,20 +227,16 @@ class LSV {
             N_ = int(ceil(mlogeps_ / Rad));
             KAbel_ = int(ceil(mlogeps_));
 
-            compute_abel_error_constants();
+            std::cout << "KAbel_: " << KAbel_ << "\n";
+            std::cout << "Computing Abel function coeffs and errors...\n";
+            compute_abel_stuff();
+            std::cout << "   ... done...\n";
+            std::cout << "Nstar_: " << Nstar_ << "\n";
+            std::cout << "\nError constants: "
+                << "  aerr_r_: " << aerr_r_ << ",   aerr_C_: " << aerr_C_ << "\n";
+            std::cout << "First Abel coefficients: " << abel_coef_.head(5).transpose() << "\n\n";
 
-            { // set Nstar empirically, instead of
-              // Nstar_ = int(ceil(nu + mlogeps_));
-                interval_t x = 1, t = 1;
-                for (Nstar_ = 0; ; Nstar_++) {
-                    x = left_inv(x)(0);
-                    t = pow(x, -gamma_);
-                    if (abel_t_in_range(t) && bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)) {
-                        break;
-                    }
-                }
-                std::cout << "Nstar_: " << Nstar_ << "\n";
-            }
+
             K_ = int(floor(((Nstar_ - nu) - 1) * 0.5));
             halfM_ = K_;
             M_ = 2 * halfM_;
@@ -290,9 +250,6 @@ class LSV {
 
             compute_integral_derivative_weights();
 
-            std::cout << "Computing Abel function coeffs...\n";
-            compute_abel_coef();
-            std::cout << "   ... done...\n";
 
         }
 
@@ -384,7 +341,7 @@ class LSV {
 
                 // evaluation of all chebs
                 auto v = [&cheb, N = N_]<typename var_t>(const var_t &x) {
-                    return cheb.basis_values(x, N);
+                    return cheb.basis_values_trig(x, N);
                 };
 
                 auto evaluate_branch_real = [&v, this](const interval_t &v0xn, const interval_t &dv0xn,
@@ -410,7 +367,12 @@ class LSV {
 
                 // 1/2 sum with the Nstar
                 r += evaluate_branch_real(v0xn, dv0xn, 0.5);
-                std::cout << "Accuracy at " << __LINE__ << ": " << uncertainty(r) << "\n";
+                { // DEBUG
+                    auto ee = uncertainty(r);
+                    if (ee > 1) {
+                        std::cout << "Accuracy at " << __LINE__ << ": " << ee << "\n";
+                    }
+                }
 
                 // figure out Abel function of x and its derivative
                 Vector2i Av0xn = abel(v0xn);
@@ -432,24 +394,50 @@ class LSV {
                     Vector2ci Aixn = abel_inv(complex_interval_t(Ax) + n_cplx);
                     complex_interval_t dv0xn = dAx * Aixn(1);
 
-                    {
+                    { // DEBUG
                         auto ee = uncertainty_c(evaluate_branch_cplx(Aixn(0), dv0xn, weight));
                         auto width = [] (const complex_interval_t &x) {
                             return bmp::width(x.real()) + bmp::width(x.imag());
                         };
                         if (ee > 1) {
+                            Vector2ci ri = right_inv(Aixn(0));
                             std::cout << "Accuracy at " << __LINE__ << ": " << ee << "\n"
                                 << "Aixn(0): " << Aixn(0) << ", width: " << width(Aixn(0)) << "\n"
                                 << "dv0xn: " << dv0xn << ", width: " << width(dv0xn) << "\n"
-                                << "weight: " << weight << ", width: " << width(weight) << "\n";
+                                << "weight: " << weight << ", width: " << width(weight) << "\n"
+                                << "ri(0):  " << ri(0)
+                                << ", width: " << width(ri(0)) + width(ri(1)) << "\n"
+                                << "N_: " << N_ << "\n";
+                            for (int j=0; j<N_; j++) {
+                                complex_interval_t c1, c2;
+                                c1 = cheb.basis_value(ri(0), j);
+                                c2 = cheb.basis_value_trig(ri(0), j);
 
+                                interval_t a = abs((c1 - c2).real()) + abs((c1 - c2).imag());
+
+                                real_t rr = bmp::upper(a);
+
+                                if (rr > 1e-8) {
+                                    std::cout << "j: " << j << ", c1: " << c1 << ", c2: " << c2
+                                        << ", widths: " << width(c1) << "  vs  " << width(c2)
+                                        << "\n";
+                                } else {
+                                    std::cout << "j: " << j << " ok!\n";
+                                }
+
+                            }
                             assert(false);
                         }
                     }
 
                     r += evaluate_branch_cplx(Aixn(0), dv0xn, weight).real();
                 }
-                std::cout << "Accuracy at " << __LINE__ << ": " << uncertainty(r) << "\n";
+                { // DEBUG
+                    auto ee = uncertainty(r);
+                    if (ee > 1) {
+                        std::cout << "Accuracy at " << __LINE__ << ": " << ee << "\n";
+                    }
+                }
 
                 // do the integral, again as a linear combination of point evaluations
                 // we use an exp transformation plus Clenshaw-Curtis
@@ -461,7 +449,7 @@ class LSV {
                         Vector2i Aixn = abel_inv<interval_t>(Ax + n);
                         interval_t dv0xn = dAx * Aixn(1);
 
-                        {
+                        { // DEBUG
                             auto ee = uncertainty(evaluate_branch_real(Aixn(0), dv0xn, weight));
                             if (ee > 1) {
                                 std::cout << "Accuracy at " << __LINE__ << ": " << ee << "\n"
@@ -609,7 +597,7 @@ class LSV {
 };  // class LSV
 
 template <int PREC>
-void LSV<PREC>::compute_abel_coef() {
+void LSV<PREC>::compute_abel_stuff() {
     abel_coef_.resize(KAbel_ + 2);
     abel_coef_ni_.resize(KAbel_ + 2);
 
@@ -626,6 +614,7 @@ void LSV<PREC>::compute_abel_coef() {
         // brute force solve lower triangular matrix
         // instead of using Eigen that can fail in interval arithmetic:
         //VectorXi x = abel_matrix().template triangularView<Eigen::Lower>().solve(b);
+        //VectorXi x = interval_root_ns::linear_krawczyk(A, b);
 
         VectorXix xx(KAbel_ + 1);
         for (int k = 0; k < KAbel_ + 1; k++) {
@@ -636,12 +625,65 @@ void LSV<PREC>::compute_abel_coef() {
             xx(k) = (b(k) - s) / A(k,k);
         }
 
-        //VectorXi x = interval_root_ns::linear_krawczyk(A, b);
-
         x_coef(0) = xx(0);
         x_coef(1) = xx(1);
+        x_coef(2) = 0;
         for (int j = 2; j <= KAbel_; j++) {
             x_coef(j + 1) = xx(j);
+        }
+    }
+
+    { // compute abel error constants
+        int n = KAbel_ - 1;
+
+        interval_extra_t q = interval_t(1) / 2,
+                         b = pow(2, gamma_);
+
+        interval_extra_t r = max(
+                bmp::upper(interval_extra_t(
+                        b / q
+                        )),
+                bmp::upper(interval_extra_t(
+                        2 * b * (gamma_ + 1) * (pow(1 - q, -gamma_) - 1) / (gamma_ * q)
+                        )
+                    ));
+
+        interval_extra_t R = (1 / r + 1 / b) / 2,
+                         bR = b * R;
+
+        interval_extra_t B = 1
+            + abs(x_coef(0)) / R * (pow(1 - bR, -gamma_) + 1)
+            - abs(x_coef(1)) * gamma_ * log(1 - bR);
+        for (int k = 1; k <= n; k++) {
+            B += abs(x_coef(2 + k)) * pow(R, k) * (pow(1 + bR, k * gamma_) + 1);
+        }
+
+        interval_extra_t M = B / pow(R, n + 1);
+
+        interval_extra_t I = sqrt(pi_) / 2
+            * bmp::tgamma(interval_extra_t(n) / 2) / bmp::tgamma(interval_extra_t(n + 1) / 2);
+
+        // OUTPUT:
+        aerr_r_ = bmp::upper(interval_t(
+                    r
+                    ));
+        aerr_C_ = bmp::upper(interval_t(
+                    pow(interval_t(2), n + 1) * M * I / (gamma_ * b)
+                    ));
+        std::cout << "aerr_r_: " << aerr_r_ << "\n";
+        std::cout << "aerr_C_: " << aerr_C_ << "\n";
+    }
+
+    { // set Nstar empirically, instead of
+      // Nstar_ = int(ceil(nu + mlogeps_));
+        interval_extra_t x = 1, t = 1;
+        for (Nstar_ = 0; ; Nstar_++) {
+            x = left_inv(x)(0);
+            t = pow(x, -gamma_);
+            if (abel_t_in_range(t) && bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)) {
+                std::cout << "Nstar_ = " << Nstar_ << ", t: " << t << "\n";
+                break;
+            }
         }
     }
 

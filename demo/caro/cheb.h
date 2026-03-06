@@ -9,6 +9,7 @@ namespace cheb_ns {
 
 using std::atan;
 using std::cos;
+using std::acos;
 
 template <typename T, typename var_t>
 concept real_or_complex = std::is_same_v<T, var_t> || std::is_same_v<T, std::complex<var_t>>;
@@ -23,6 +24,7 @@ class Cheb {
         typedef VectorX<real_t> VectorXr;
     private:
         static const real_t pi_;
+        static const real_t half_;
 
         int N_;
         real_t a_, b_;
@@ -52,7 +54,7 @@ class Cheb {
             // compute a vector of values of f
             Cheb::VectorXr f_val(N_);
             for (int k = 0; k < N_; k++)
-                f_val(k) = f(cos(pi_ * (k + 0.5) * Ni_) * bma2_ + bpa2_);
+                f_val(k) = f(cos(pi_ * (k + half_) * Ni_) * bma2_ + bpa2_);
 
             set_from_values(f_val);
         };
@@ -78,7 +80,7 @@ class Cheb {
             VectorXr no;
             no.resize(N_);
             for (int k = 0; k < N_; k++)
-                no(k) = cos(pi_ * (k + 0.5) * Ni_) * bma2_ + bpa2_;
+                no(k) = cos(pi_ * (k + half_) * Ni_) * bma2_ + bpa2_;
             return no;
         }
 
@@ -107,6 +109,31 @@ class Cheb {
             return value(x);
         }
 
+        // trigonometric computation of value when coef = (0,...,0,1,0,...,0),
+        // with 1 at index n
+        template <real_or_complex<real_t> var_t>
+        var_t basis_value_trig(const var_t &x, int n) const {
+            var_t y = (x - bpa2_) / bma2_,
+                  a = acos(y),
+                  an = a * var_t(n);
+            return (n==0) ? half_ : cos(an);
+        }
+        // trigonometric computation of value at fist N basis vectors
+        template <real_or_complex<real_t> var_t>
+        VectorX<var_t> basis_values_trig(const var_t &x, int N) const {
+            VectorX<var_t> ret = VectorX<var_t>::Zero(N);
+            ret(0) = half_;
+
+            const var_t y = (x - bpa2_) / bma2_,
+                  a = acos(y);
+
+            var_t an = a;
+            for (int j = 1; j < N; j++) {
+                ret(j) = cos(an);
+                an += a;
+            }
+            return ret;
+        }
         // optimized computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
         template <real_or_complex<real_t> var_t>
@@ -121,13 +148,13 @@ class Cheb {
                 d = y2 * d - dd;
                 dd = sv;
             }
-            return y * d - dd + ((n == 0) ? (var_t(0.5)) : var_t(0));
+            return y * d - dd + ((n == 0) ? half_ : var_t(0));
         }
         // optimized computation of value at fist N basis vectors
         template <real_or_complex<real_t> var_t>
         VectorX<var_t> basis_values(const var_t &x, int N) const {
             VectorX<var_t> ret = VectorX<var_t>::Zero(N);
-            ret(0) = var_t(0.5);
+            ret(0) = half_;
             // Clenshaw recurrence
             var_t d(1), dd(0),
                   y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_);
@@ -156,7 +183,7 @@ class Cheb {
         }
 
         Cheb integral() const {
-            real_t sum = 0.0, fac = 1.0, con = (b_ - a_) / 4;
+            real_t sum = 0, fac = 1, con = (b_ - a_) / 4;
             VectorXr cint(N_);
             for (int j = 1; j < N_ - 1; j++) {
                 cint[j] = con * (coef_[j - 1] - coef_[j + 1]) / j;
@@ -165,7 +192,7 @@ class Cheb {
             }
             cint[N_ - 1] = con * coef_[N_ - 2] / (N_ - 1);
             sum += fac * cint[N_ - 1];
-            cint[0] = 2.0 * sum;
+            cint[0] = 2 * sum;
             return Cheb(cint, a_, b_);
         }
 
@@ -199,7 +226,7 @@ class Cheb {
             for (int k = 0; k < N; k++) {
                 r(k) = 0;
                 for (int n = 0; n < N; n++) {
-                    r(k) += v(n) * cos(pi_ * (n + 0.5) * k * Ni);
+                    r(k) += v(n) * cos(pi_ * (n + half_) * k * Ni);
                 }
             }
             return r;
@@ -208,5 +235,7 @@ class Cheb {
 
 template <typename real_t>
 const real_t Cheb<real_t>::pi_ = 4 * atan(real_t(1));
+template <typename real_t>
+const real_t Cheb<real_t>::half_ = real_t(1) / 2;
 
 } // namespace cheb_ns
