@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cmath> // for sin and atan for standard types
+#include <complex>
 #include <type_traits>
 #include <unsupported/Eigen/FFT>
-#include <type_traits>
+#include <cassert>
+#include <functional>
 
 namespace cheb_ns {
 
@@ -11,17 +13,22 @@ using std::atan;
 using std::cos;
 using std::acos;
 
-template <typename T, typename var_t>
-concept real_or_complex = std::is_same_v<T, var_t> || std::is_same_v<T, std::complex<var_t>>;
+template <typename T, typename... TArgs>
+concept type_one_of = (std::same_as<T, TArgs> || ...);
 
 // home made class for basic Chebyshev approximation
 template <typename real_t>
 class Cheb {
     public:
+        using complex_t = std::complex<real_t>;
+
         template <typename var_t>
             using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
 
-        typedef VectorX<real_t> VectorXr;
+        using VectorXr = VectorX<real_t>;
+        using VectorXc = VectorX<complex_t>;
+
+
     private:
         static const real_t pi_;
         static const real_t half_;
@@ -90,7 +97,7 @@ class Cheb {
             coef_ = kissDCT2(values) * 2 * Ni_;
         }
 
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         var_t value(const var_t &x) const {
             // Clenshaw recurrence
             var_t d(0),
@@ -104,14 +111,14 @@ class Cheb {
             }
             return y * d - dd + coef_(0) / var_t(2);
         }
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         var_t operator()(const var_t &x) const {
             return value(x);
         }
 
         // trigonometric computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         var_t basis_value_trig(const var_t &x, int n) const {
             var_t y = (x - bpa2_) / bma2_,
                   a = acos(y),
@@ -119,7 +126,7 @@ class Cheb {
             return (n==0) ? half_ : cos(an);
         }
         // trigonometric computation of value at fist N basis vectors
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         VectorX<var_t> basis_values_trig(const var_t &x, int N) const {
             VectorX<var_t> ret = VectorX<var_t>::Zero(N);
             ret(0) = half_;
@@ -136,7 +143,7 @@ class Cheb {
         }
         // optimized computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         var_t basis_value(const var_t &x, int n) const {
             // Clenshaw recurrence
             var_t d((n > 0) ? 1 : 0),
@@ -151,7 +158,7 @@ class Cheb {
             return y * d - dd + ((n == 0) ? half_ : var_t(0));
         }
         // optimized computation of value at fist N basis vectors
-        template <real_or_complex<real_t> var_t>
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         VectorX<var_t> basis_values(const var_t &x, int N) const {
             VectorX<var_t> ret = VectorX<var_t>::Zero(N);
             ret(0) = half_;
@@ -168,12 +175,12 @@ class Cheb {
         }
 
         Cheb derivative() const {
-            VectorXr d_coef(N_);
-            if (N_ > 0)
-                d_coef(N_ - 1) = 0;
+            VectorXr d_coef = VectorXr::Zero(N_ > 1 ? (N_ - 1) : 1);
             if (N_ > 1)
                 d_coef(N_ - 2) = 2 * (N_ - 1) * coef_(N_ - 1);
-            for (int j = N_ - 2; j > 0; j--)
+            if (N_ > 2)
+                d_coef(N_ - 3) = 2 * (N_ - 2) * coef_(N_ - 2);
+            for (int j = N_ - 3; j > 0; j--)
                 d_coef(j - 1) = d_coef(j + 1) + 2 * j * coef_(j);
 
             d_coef *= bma2i_;
@@ -181,17 +188,20 @@ class Cheb {
             Cheb r(d_coef, a_, b_);
             return r;
         }
-
         Cheb integral() const {
             real_t sum = 0, fac = 1, con = (b_ - a_) / 4;
-            VectorXr cint(N_);
+            VectorXr cint(N_ + 1);
             for (int j = 1; j < N_ - 1; j++) {
                 cint[j] = con * (coef_[j - 1] - coef_[j + 1]) / j;
                 sum += fac * cint[j];
                 fac = -fac;
             }
-            cint[N_ - 1] = con * coef_[N_ - 2] / (N_ - 1);
-            sum += fac * cint[N_ - 1];
+            // two last coefficients where there is no coef_[j+1]
+            for (int j = N_ > 1 ? (N_ - 1) : 1; j <= N_; j++) {
+                cint[j] = con * coef_[j - 1] / j;
+                sum += fac * cint[j];
+                fac = -fac;
+            }
             cint[0] = 2 * sum;
             return Cheb(cint, a_, b_);
         }
@@ -206,8 +216,7 @@ class Cheb {
                 vd(4 * N - 2 * i - 1) = v(i);
             }
 
-            // dynamic complex vector
-            Eigen::Matrix<std::complex<real_t>,Eigen::Dynamic,1> rc;
+            VectorXc rc;
 
             Eigen::FFT<real_t> fft;
             fft.fwd(rc, vd);
