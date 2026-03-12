@@ -12,6 +12,7 @@ namespace cheb_ns {
 using std::atan;
 using std::cos;
 using std::acos;
+using std::pow;
 
 template <typename T, typename... TArgs>
 concept type_one_of = (std::same_as<T, TArgs> || ...);
@@ -208,6 +209,32 @@ class Cheb {
             }
             cint[0] = 2 * sum;
             return Cheb(cint, a_, b_);
+        }
+
+        // For x \in [a,b] and \beta > -1, compute
+        //     \int_a^x (t - a)^\beta basis_values(t) dt
+        VectorXr beta_integral(const real_t &beta, const real_t &x, int N) const {
+            assert(beta > real_t(-1));
+            assert(N > 0);
+
+            const real_t y = (2 * x - bpa_) * bmai_,
+                  y1b1 = pow(y + 1, beta + 1);
+            const VectorXr bv = basis_values_trig(x, N);
+
+            VectorXr I(N);
+            I(0) = y1b1 / (beta + 1);
+            if (N > 1)
+                I(1) = y1b1 * (y + 1) / (beta + 2) - I(0);
+            for (int j = 2; j < N; j++)
+                I(j) = (
+                        I(j - 1) * 2 * beta
+                        + I(j - 2) * (-beta + j - 3)
+                        - bv(j - 1) * 2 * (1 - y) * y1b1
+                       ) / (beta + j + 1);
+
+            I(0) /= 2;
+            I *= pow(bma2_, beta + 1);
+            return I;
         }
 
         // discrete cosine transform type 2: eigen's kissfft
