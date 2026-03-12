@@ -16,7 +16,12 @@ using std::acos;
 template <typename T, typename... TArgs>
 concept type_one_of = (std::same_as<T, TArgs> || ...);
 
-// home made class for basic Chebyshev approximation
+// A home made class for Chebyshev approximation, based on Numerical Recipes.
+//
+// For x \in [a, b], the value is
+//     f(x) = coef(0) * T_0(y) / 2 + coef(1) * T_1(y) + ... + coef(N-1) * T_{N-1}(y),
+// where y = 2 * (x - a) / (b - a) - 1 \in [-1, 1],
+// and T_0, T_1, ..., T_{N-1} are the Chebyshev polynomials of first kind.
 template <typename real_t>
 class Cheb {
     public:
@@ -133,7 +138,6 @@ class Cheb {
 
             const var_t y = (x - bpa2_) / bma2_,
                   a = acos(y);
-
             var_t an = a;
             for (int j = 1; j < N; j++) {
                 ret(j) = cos(an);
