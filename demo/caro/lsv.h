@@ -97,18 +97,23 @@ class LSV {
 
         static constexpr int PREC_ = PREC;
         interval_t kappa_, mlogeps_, tau_, W_;
-        int N_, Nstar_, K_, KAbel_, halfM_, M_, Mhat_, P_;
+        int N_, Nstar_, L_, KAbel_, halfM_, M_, Mhat_, P_;
 
-        // Error in Abel function
-        //interval_t R1_, R1_inv_, rn_, d3d2rn_, R1rn_inv_;
-        real_t aerr_r_, aerr_C_;
+        // Constants from the Abel function, with \tA = \tilde{A},
+        // |\tA(z) - \tA_n(z)| \leq abel_C0_ |t|^{-n}  when  Re(t) \geq abel_r_
+        real_t abel_r_, abel_C0_;
+        // |\tA'(t) - a_{-1}| \leq abel_C1_ when Re(t) \leq abel_r1_
+        real_t abel_r1_, abel_C1_;
+        // derived variables
+        real_t abel_delta1_,        // = abel_C1_ / sqrt(a_{-1}^2 - abel_C1_^2)
+               abel_varkappa1_;     // = (1 + abel_delta1_^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
 
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
         bool abel_t_in_range(const i_t &t) const {
-            return bmp::lower(t) >= aerr_r_;
+            return bmp::lower(t) >= abel_r_;
         }
         bool abel_t_in_range(const complex_interval_t &t) const {
-            return bmp::lower(t.real()) >= aerr_r_;
+            return bmp::lower(t.real()) >= abel_r_;
         }
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
         i_t abel_t_error(const i_t &t) const {
@@ -123,14 +128,14 @@ class LSV {
             }
 
             const int n = KAbel_ - 1;
-            ir_t factor = aerr_C_ * pow(abs(t), -n),
+            ir_t factor = abel_C0_ * pow(abs(t), -n),
                  window (-bmp::upper(factor), bmp::upper(factor));
 
             //DEBUG
             {
                 if (factor > 1) {
                     std::cout << "PIZDA!! t: " << t << ", factor: " << factor << "\n";
-                    std::cout << "n: " << n << ", aerr_C_: " << aerr_C_ << "\n";
+                    std::cout << "n: " << n << ", abel_C0_: " << abel_C0_ << "\n";
                 }
             }
 
@@ -146,7 +151,7 @@ class LSV {
 
         void compute_integral_derivative_weights() {
             // check that required constants are set
-            assert(halfM_ > 0 && Nstar_ > 0 && tau_ > 0 && M_ > 0 && K_ > 0 && P_ > 0 && W_ > 0);
+            assert(halfM_ > 0 && Nstar_ > 0 && tau_ > 0 && M_ > 0 && L_ > 0 && P_ > 0 && W_ > 0);
 
             {  // derivatives
                 std::cout << "Computing derivatives, halfM_: " << halfM_ << "...\n";
@@ -154,24 +159,24 @@ class LSV {
                 for (int k = 0; k < halfM_; k++)
                     taylorpoints_(k) = complex_interval_t(Nstar_, 0)
                         + tau_ * exp(complex_interval_t(0, (2 * k + 1) * pi_ / M_));
-                MatrixXci FFTweights(halfM_, K_);
+                MatrixXci FFTweights(halfM_, L_);
 #pragma omp parallel for collapse(2) schedule(dynamic)
                 for (int m = 0; m < halfM_; m++)
-                    for (int k = 0; k < K_; k++)
+                    for (int k = 0; k < L_; k++)
                         FFTweights(m, k) =
                             exp(complex_interval_t(0, - (pi_ * (2 * k + 1) * (2 * m + 1)) / M_))
                             / complex_interval_t(halfM_);
-                std::cout << "   ... computing bernoulli2k(" << K_ << ") ...\n";
-                VectorXi EMderivativeweights = -bernoulli2k(K_).tail(K_);
+                std::cout << "   ... computing bernoulli2k(" << L_ << ") ...\n";
+                VectorXi EMderivativeweights = -bernoulli2k(L_).tail(L_);
                 std::cout << "   ... bernoulli2k done ...\n";
-                for (int k = 0; k < K_; k++)
+                for (int k = 0; k < L_; k++)
                     EMderivativeweights(k) /= pow(tau_, 2*k + 1) * 2 * (k + 1);
                 taylorpointweights_ = FFTweights * EMderivativeweights;
                 { // DEBUG
                     std::cout << "error in taylor point weights: " << uncertainty_c(taylorpointweights_) << "\n"
                         << "error in FFTweights: " << uncertainty_c(FFTweights) << "\n"
                         << "error in EMderivativeweights: " << uncertainty_c(EMderivativeweights) << "\n"
-                        << "error in bernoulli: " << uncertainty_c(bernoulli2k(K_)) << "\n";
+                        << "error in bernoulli: " << uncertainty_c(bernoulli2k(L_)) << "\n";
                 }
                 std::cout << "   ... done\n";
             }
@@ -233,23 +238,26 @@ class LSV {
             std::cout << "   ... done...\n";
             std::cout << "Nstar_: " << Nstar_ << "\n";
             std::cout << "\nError constants: "
-                << "  aerr_r_: " << aerr_r_ << ",   aerr_C_: " << aerr_C_ << "\n";
+                << "  abel_r_: " << abel_r_ << ",   abel_C0_: " << abel_C0_ << "\n";
             std::cout << "First Abel coefficients: " << abel_coef_.head(5).transpose() << "\n\n";
 
 
-            K_ = int(floor(((Nstar_ - nu) - 1) * 0.5));
-            halfM_ = K_;
+            // L is the number of derivatives FIXME: what should it be?
+            L_ = 1 + Nstar_ / 2;
+            // M is the number of points on the circle
+            halfM_ = L_;
             M_ = 2 * halfM_;
+            // tau is the radius of the circle
             tau_ = (Nstar_ - nu) * exp(-interval_t(1));
-            assert(M_ >= 2*K_);
-            assert(exp(interval_t(1)) * 2 * pi_ * (Nstar_ - nu) > 2 * K_);
+
+            assert(M_ >= 2*L_);
+            assert(exp(interval_t(1)) * 2 * pi_ * (Nstar_ - nu) > 2 * L_);
 
             Mhat_ = 2 * M_;
             W_ = 1;
             P_ = int(ceil(mlogeps_ / W_ / kappa_));
 
             compute_integral_derivative_weights();
-
 
         }
 
@@ -480,8 +488,7 @@ class LSV {
         // Approximate Abel function A(x), satisfying A(left(x)) = A(x) - 1.
         // With t = t(x) = x^{-gamma}, and N = KAbel-1, we use an asymptotic approximation
         //      A(x) ≈ am1 t + al log t + a0 + a1 / t + a2 / t^2 + ... + aN / t^N
-        // which is valid for sufficiently large Re(t) and |t|
-        // with error O(N^{N+2} t^{N+1}).
+        // which is valid for sufficiently large Re(t) with a controlled error
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel(const var_t &x) const {
             var_t t = pow(x, -gamma_);
@@ -666,14 +673,40 @@ void LSV<PREC>::compute_abel_stuff() {
             * bmp::tgamma(ix_t(n) / 2) / bmp::tgamma(ix_t(n + 1) / 2);
 
         // OUTPUT:
-        aerr_r_ = bmp::upper(interval_t(
+        abel_r_ = bmp::upper(interval_t(
                     r
                     ));
-        aerr_C_ = bmp::upper(interval_t(
+        abel_C0_ = bmp::upper(interval_t(
                     pow(interval_t(2), n + 1) * M * I / (gamma_ * b)
                     ));
-        std::cout << "aerr_r_: " << aerr_r_ << "\n";
-        std::cout << "aerr_C_: " << aerr_C_ << "\n";
+        std::cout << "abel_r_: " << abel_r_ << "\n"
+            << "abel_C0_: " << abel_C0_ << "\n";
+
+        // now abel_r1_, abel_C1_ ...
+        assert(x_coef(0) > 0); // sanity check
+        ix_t C1, r1;
+        r1 = abel_r_;
+
+        for (;;) {
+            r1 += 1;
+            C1 = abs(x_coef(1)) / r1 + abel_C0_ * pow(abel_r_, -n) / (r1 - abel_r_);
+            for (int k = 1; k <= n; k++)
+                C1 += k * abs(x_coef(2 + k)) / pow(r1, k + 1);
+            if (bmp::upper(ix_t(C1 / x_coef(0))) < ix_t(0.25)) { // arbitrary small constant
+                break;
+            }
+        }
+        abel_r1_ = bmp::upper(interval_t(r1));
+        abel_C1_ = bmp::upper(interval_t(C1));
+
+        real_t C1am1 = bmp::upper(interval_t(C1 / x_coef(0)));
+        abel_delta1_ = pow(pow(C1am1, -2) - 1, real_t(-1) / 2);
+        abel_varkappa1_ = pow(1 - pow(C1am1, 2), real_t(1) / 2);
+
+        std::cout << "abel_r1_: " << abel_r1_ << "\n"
+            << "abel_C1_: " << abel_C1_ << "\n"
+            << "abel_delta1_: " << abel_delta1_ << "\n"
+            << "abel_varkappa1_: " << abel_varkappa1_ << "\n";
     }
 
     { // set Nstar empirically, instead of
