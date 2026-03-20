@@ -7,14 +7,14 @@
 #include <type_traits>
 #include <Eigen/Core>
 
+// arbitrary precision and intervals
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/multiprecision/mpfi.hpp>
 #include <boost/multiprecision/detail/default_ops.hpp>
 #include <boost/multiprecision/eigen.hpp>
 
-// for arbitrary precision integers (for Bernoulli)
+// arbitrary precision integers (for Bernoulli)
 #include <boost/multiprecision/gmp.hpp>
-
 
 #include "clenshawcurtis.h"
 #include "cheb.h"
@@ -48,6 +48,7 @@ class LSV {
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
         // extra precision
+        using real_extra_t     = bmp::number<bmp::mpfr_float_backend<2 * DIGITS>>;
         using interval_extra_t = bmp::number<bmp::mpfi_float_backend<2 * DIGITS>>;
 
         using complex_t = std::complex<real_t>;
@@ -85,6 +86,7 @@ class LSV {
         typedef Cheb<interval_t> real_cheb_t;
     private:
         static const interval_t pi_;
+        static const interval_extra_t pi_x_;
         static const real_t real_eps_;
         static const real_t real_eps_sqrt_;
 
@@ -96,17 +98,19 @@ class LSV {
         MatrixXix abel_matrix() const;
 
         static constexpr int PREC_ = PREC;
-        interval_t kappa_, mlogeps_, tau_, W_;
-        int N_, Nstar_, L_, KAbel_, halfM_, M_, Mhat_, P_;
+        interval_t kappa_, mlogeps_, tau_;
+        int N_, Nstar_, L_, halfM_, M_, Mhat_, P_;
 
-        // Constants from the Abel function, with \tA = \tilde{A},
+        // Constants from the Abel function, with \tA = \tilde{A} and \hA = \hat{A},
+        // \tA_n(t) = a_{-1} + a_\ell + a_0 + a_1 t + ... + a_n t^n
+        int abel_n_;
         // |\tA(z) - \tA_n(z)| \leq abel_C0_ |t|^{-n}  when  Re(t) \geq abel_r_
         real_t abel_r_, abel_C0_;
         // |\tA'(t) - a_{-1}| \leq abel_C1_ when Re(t) \leq abel_r1_
         real_t abel_r1_, abel_C1_;
         // derived variables
-        real_t abel_delta1_,        // = abel_C1_ / sqrt(a_{-1}^2 - abel_C1_^2)
-               abel_varkappa1_;     // = (1 + abel_delta1_^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
+        real_t abel_delta1_,        // = C1 / sqrt(a_{-1}^2 - C1^2)
+               abel_varkappa1_;     // = (1 + delta1^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
 
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
         bool abel_t_in_range(const i_t &t) const {
@@ -127,7 +131,7 @@ class LSV {
                 assert(false);
             }
 
-            const int n = KAbel_ - 1;
+            const int n = abel_n_;
             ir_t factor = abel_C0_ * pow(abs(t), -n),
                  window (-bmp::upper(factor), bmp::upper(factor));
 
@@ -151,7 +155,7 @@ class LSV {
 
         void compute_integral_derivative_weights() {
             // check that required constants are set
-            assert(halfM_ > 0 && Nstar_ > 0 && tau_ > 0 && M_ > 0 && L_ > 0 && P_ > 0 && W_ > 0);
+            assert(halfM_ > 0 && Nstar_ > 0 && tau_ > 0 && M_ > 0 && L_ > 0 && P_ > 0);
 
             {  // derivatives
                 std::cout << "Computing derivatives, halfM_: " << halfM_ << "...\n";
@@ -191,8 +195,8 @@ class LSV {
 #pragma omp parallel for collapse(2) schedule(dynamic)
                 for (int m = 0; m < Mhat_; m++) {
                     for (int p = 0; p < P_; p++) {
-                        integralccpoints_(m, p) = Nstar_ * exp(2 * W_ * (cc.nodes()(m) + p));
-                        integralccweights_(m, p) = integralccpoints_(m, p) * 2 * W_ * cc.weights()(m);
+                        integralccpoints_(m, p) = Nstar_ * exp(2 * (cc.nodes()(m) + p));
+                        integralccweights_(m, p) = integralccpoints_(m, p) * 2 * cc.weights()(m);
                     }
                 }
                 std::cout << "   ... done\n";
@@ -230,20 +234,27 @@ class LSV {
             kappa_ = interval_t(1) / gamma_;
             mlogeps_ = log(interval_t(2)) * PREC_;
             N_ = int(ceil(mlogeps_ / Rad));
-            KAbel_ = int(ceil(mlogeps_));
 
-            std::cout << "KAbel_: " << KAbel_ << "\n";
-            std::cout << "Computing Abel function coeffs and errors...\n";
+            std::cout << "Computing Abel function coeffs and constants...\n";
+            abel_n_ = int(ceil(mlogeps_)) - 1;
             compute_abel_stuff();
-            std::cout << "   ... done...\n";
-            std::cout << "Nstar_: " << Nstar_ << "\n";
-            std::cout << "\nError constants: "
-                << "  abel_r_: " << abel_r_ << ",   abel_C0_: " << abel_C0_ << "\n";
-            std::cout << "First Abel coefficients: " << abel_coef_.head(5).transpose() << "\n\n";
-
+            std::cout << "   ... done...\n"
+                << "abel_n_: " << abel_n_ << ", "
+                << "Nstar_: " << Nstar_ << "\n"
+                << "abel_r_: " << abel_r_ << ", "
+                << "abel_C0_: " << abel_C0_ << "\n"
+                << "abel_r1_: " << abel_r1_ << ", "
+                << "abel_C1_: " << abel_C1_ << "\n"
+                << "abel_delta1_: " << abel_delta1_ << ", "
+                << "abel_varkappa1_: " << abel_varkappa1_ << "\n"
+                << "First Abel coefficients: " << abel_coef_ni_.head(5).transpose()
+                << "\n\n";
 
             // L is the number of derivatives FIXME: what should it be?
-            L_ = 1 + Nstar_ / 2;
+            // It used to be
+            //      L_ = 1 + Nstar_ / 2;
+            // but we need it in the computation of Nstar_, so now we set it there
+
             // M is the number of points on the circle
             halfM_ = L_;
             M_ = 2 * halfM_;
@@ -254,8 +265,7 @@ class LSV {
             assert(exp(interval_t(1)) * 2 * pi_ * (Nstar_ - nu) > 2 * L_);
 
             Mhat_ = 2 * M_;
-            W_ = 1;
-            P_ = int(ceil(mlogeps_ / W_ / kappa_));
+            P_ = int(ceil(mlogeps_ / kappa_));
 
             compute_integral_derivative_weights();
 
@@ -263,7 +273,8 @@ class LSV {
 
         int NCheb() const { return N_; };
         int prec() const { return PREC_; };
-        int KAbel() const { return KAbel_; };
+        int KAbel() const { return abel_n_ + 1; };
+        int abel_n() const { return abel_n_; };
         interval_t alpha() const { return 1 / gamma_; };
         interval_t gamma() const { return gamma_; };
         VectorXi abel_coef() const { return abel_coef_; };
@@ -500,13 +511,13 @@ class LSV {
             (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>) ||
             (type_one_of<var_t, interval_extra_t> && type_one_of<coef_t, VectorXix>)
         Vector2<var_t> abel_t(const var_t &t, const coef_t &coef) const {
-            assert(coef.size() == KAbel_ + 2);
+            assert(coef.size() == abel_n_ + 3);
             var_t A = coef(0) * t + coef(1) * log(t) + coef(2),
                   dA = coef(0) + coef(1) / t;
 
             const var_t ti = var_t(1) / t;
             var_t tj = ti;
-            for (int j = 1; j <= KAbel_ - 1; j++) {
+            for (int j = 1; j <= abel_n_; j++) {
                 A += coef(2 + j) * tj;
                 tj *= ti;
                 dA -= var_t(j) * coef(2 + j) * tj;
@@ -606,16 +617,19 @@ class LSV {
 template <int PREC>
 void LSV<PREC>::compute_abel_stuff() {
 
+    using rx_t = real_extra_t;
     using ix_t = interval_extra_t;
 
-    abel_coef_.resize(KAbel_ + 2);
-    abel_coef_ni_.resize(KAbel_ + 2);
+    abel_coef_.resize(abel_n_ + 3);
+    abel_coef_ni_.resize(abel_n_ + 3);
+
+    rx_t r, C0, r1, C1, delta1, varkappa1;
 
     // We do the computation in extra precision first, then dumb it down
-    VectorXix x_coef(KAbel_ + 2);
+    VectorXix x_coef(abel_n_ + 3);
 
     { // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
-        VectorXix b = VectorXix::Zero(KAbel_ + 1);
+        VectorXix b = VectorXix::Zero(abel_n_ + 2);
         b(0) = -1;
 
         MatrixXix A = abel_matrix(); // lower triangular
@@ -625,8 +639,8 @@ void LSV<PREC>::compute_abel_stuff() {
         //VectorXi x = abel_matrix().template triangularView<Eigen::Lower>().solve(b);
         //VectorXi x = interval_root_ns::linear_krawczyk(A, b);
 
-        VectorXix xx(KAbel_ + 1);
-        for (int k = 0; k < KAbel_ + 1; k++) {
+        VectorXix xx(abel_n_ + 2);
+        for (int k = 0; k < abel_n_ + 2; k++) {
             ix_t s = 0;
             for (int j = 0; j < k; j++) {
                 s += A(k,j) * xx(j);
@@ -637,18 +651,18 @@ void LSV<PREC>::compute_abel_stuff() {
         x_coef(0) = xx(0);
         x_coef(1) = xx(1);
         x_coef(2) = 0;
-        for (int j = 2; j <= KAbel_; j++) {
+        for (int j = 2; j <= abel_n_ + 1; j++) {
             x_coef(j + 1) = xx(j);
         }
     }
 
-    { // compute abel error constants
-        int n = KAbel_ - 1;
+    { // compute r, C0
+        const int n = abel_n_;
 
         ix_t q = ix_t(1) / 2,
              b = pow(2, gamma_);
 
-        ix_t r = max(
+        r = max(
                 bmp::upper(ix_t(
                         b / q
                         )),
@@ -672,51 +686,52 @@ void LSV<PREC>::compute_abel_stuff() {
         ix_t I = sqrt(pi_) / 2
             * bmp::tgamma(ix_t(n) / 2) / bmp::tgamma(ix_t(n + 1) / 2);
 
-        // OUTPUT:
-        abel_r_ = bmp::upper(interval_t(
-                    r
-                    ));
-        abel_C0_ = bmp::upper(interval_t(
-                    pow(interval_t(2), n + 1) * M * I / (gamma_ * b)
-                    ));
-        std::cout << "abel_r_: " << abel_r_ << "\n"
-            << "abel_C0_: " << abel_C0_ << "\n";
+        C0 = bmp::upper(pow(ix_t(2), n + 1) * M * I / (gamma_ * b));
+    }
 
-        // now abel_r1_, abel_C1_ ...
+    {   // now r1, C1 ...
         assert(x_coef(0) > 0); // sanity check
-        ix_t C1, r1;
-        r1 = abel_r_;
+        const int n = abel_n_;
 
-        for (;;) {
-            r1 += 1;
-            C1 = abs(x_coef(1)) / r1 + abel_C0_ * pow(abel_r_, -n) / (r1 - abel_r_);
+        // increase r1 until C1 is significantly smaller than a_{-1}
+        ix_t max_C1 = bmp::lower(ix_t(x_coef(0) / 16));
+        for (r1 = r + 1; ; r1 += 1) {
+            ix_t iC1 = abs(x_coef(1)) / r1 + C0 * pow(r, -n) / (r1 - r);
             for (int k = 1; k <= n; k++)
-                C1 += k * abs(x_coef(2 + k)) / pow(r1, k + 1);
-            if (bmp::upper(ix_t(C1 / x_coef(0))) < ix_t(0.25)) { // arbitrary small constant
+                iC1 += k * abs(x_coef(2 + k)) / pow(r1, k + 1);
+
+            if (bmp::upper(iC1) < max_C1) {
+                C1 = bmp::upper(iC1);
                 break;
             }
         }
-        abel_r1_ = bmp::upper(interval_t(r1));
-        abel_C1_ = bmp::upper(interval_t(C1));
 
-        real_t C1am1 = bmp::upper(interval_t(C1 / x_coef(0)));
-        abel_delta1_ = pow(pow(C1am1, -2) - 1, real_t(-1) / 2);
-        abel_varkappa1_ = pow(1 - pow(C1am1, 2), real_t(1) / 2);
-
-        std::cout << "abel_r1_: " << abel_r1_ << "\n"
-            << "abel_C1_: " << abel_C1_ << "\n"
-            << "abel_delta1_: " << abel_delta1_ << "\n"
-            << "abel_varkappa1_: " << abel_varkappa1_ << "\n";
+        ix_t C1am1 = interval_t(C1 / x_coef(0));
+        delta1       = bmp::upper(ix_t(pow(pow(C1am1, -2) - 1, real_t(-1) / 2)));
+        varkappa1    = bmp::lower(ix_t(pow(1 - pow(C1am1, 2), real_t(1) / 2)));
     }
 
-    { // set Nstar empirically, instead of
-      // Nstar_ = int(ceil(nu + mlogeps_));
+    { // set Nstar and L
+      // instead of
+      //    Nstar_ = int(ceil(nu + mlogeps_));
+      // we slowly increase Nstar until the constraints are satisfied.
+        ix_t Ar1 = abel_t(ix_t(r1), x_coef)(0);
         ix_t x = 1, t = 1;
+
         for (Nstar_ = 0; ; Nstar_++) {
             x = left_inv(x)(0);
             t = pow(x, -gamma_);
-            if (abel_t_in_range(t) && bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)) {
-                std::cout << "Nstar_ = " << Nstar_ << ", t: " << t << "\n";
+            rx_t At = bmp::lower(abel_t(t, x_coef)(0));
+
+            // unremarkable, but we set the number of derivatives L here
+            L_ = 1 + Nstar_ / 2;
+
+            rx_t min_At = bmp::upper(
+                    Ar1 + ix_t(L_) / (exp(ix_t(1)) * pi_x_ * varkappa1)
+                    );
+            if (    abel_t_in_range(t)
+                    && bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)
+                    && At > min_At   ) {
                 break;
             }
         }
@@ -737,10 +752,27 @@ void LSV<PREC>::compute_abel_stuff() {
     }
 
     // populate the coefficients
-    for (int k = 0; k <= KAbel_ + 1; k++) {
+    for (int k = 0; k <= abel_n_ + 2; k++) {
         abel_coef_(k) = interval_t(x_coef(k));
         abel_coef_ni_(k) = real_t(bmp::median(x_coef(k)));
     }
+
+    // we computed the constants in extended precision,
+    // we revert to normal precision
+    auto round_up = [] (const rx_t x) {
+        return real_t(bmp::upper(ix_t(x)));
+    };
+    auto round_down = [] (const rx_t x) {
+        return real_t(bmp::lower(ix_t(x)));
+    };
+    abel_r_  = round_up(r);
+    abel_C0_ = round_up(C0);
+    abel_r1_ = round_up(r1);
+    abel_C1_ = round_up(C1);
+    abel_delta1_ = round_up(delta1);
+    abel_varkappa1_ = round_down(varkappa1);
+
+    return;
 }
 
 template <int PREC>
@@ -749,23 +781,23 @@ LSV<PREC>::MatrixXix LSV<PREC>::abel_matrix() const {
     // * first column: coefficients of t(left(z))
     // * second column: coefficients of log(t(left(z)))
     // * 2+n column: coefficients of t(left(z))^{-k} - t^{-k}
-    MatrixXix X = MatrixXix::Zero(KAbel_ + 1, KAbel_ + 1);
+    MatrixXix X = MatrixXix::Zero(abel_n_ + 2, abel_n_ + 2);
     const interval_extra_t g = gamma_, b = pow(2, g);
     interval_extra_t c;
 
     c = - g * b;
-    for (int j = 0; j <= KAbel_; j++) {
+    for (int j = 0; j <= abel_n_ + 1; j++) {
         X(j,0) = c;
         c *= b * (-g - j - 1) / (j + 2);
     }
     c = - g * b;
-    for (int j = 1; j <= KAbel_; j++) {
+    for (int j = 1; j <= abel_n_ + 1; j++) {
         X(j,1) = c / j;
         c *= -b;
     }
-    for (int k = 1; k <= KAbel_ - 1; k++) {
+    for (int k = 1; k <= abel_n_; k++) {
         c = 1;
-        for (int j = k + 1; j <= KAbel_; j++) {
+        for (int j = k + 1; j <= abel_n_ + 1; j++) {
             c *= (k * g - j + k + 1) * b / (j - k);
             X(j, k+1) = c;
         }
@@ -776,6 +808,8 @@ LSV<PREC>::MatrixXix LSV<PREC>::abel_matrix() const {
 
 template <int PREC>
 const LSV<PREC>::interval_t LSV<PREC>::pi_ = 4 * atan(interval_t(1));
+template <int PREC>
+const LSV<PREC>::interval_extra_t LSV<PREC>::pi_x_ = 4 * atan(interval_extra_t(1));
 
 template <int PREC>
 const LSV<PREC>::real_t LSV<PREC>::real_eps_ = std::numeric_limits<real_t>::epsilon();
