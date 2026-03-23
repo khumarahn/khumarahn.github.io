@@ -2,6 +2,10 @@
 
 let alpha = 0.75;
 
+function SQR(x) {
+    return x * x;
+}
+
 function lsv_trace() {
     let trace = {
         x: [],
@@ -165,6 +169,7 @@ function three_conditions(N) {
     function COND(x) {
         let y1 = LSV_left_i(x, alpha),
             y2 = LSV_right_i(x, alpha),
+            hx = h(x),
             h1 = h(y1),
             h2 = h(y2),
             w1 = LSV_left_w(y1, alpha),
@@ -177,11 +182,10 @@ function three_conditions(N) {
         let A = h1[1] / h1[0] * w1 + wp1 - (h2[1] / h2[0] * w2 + wp2);
         A = -A;
 
-        let B = h1[2] / h1[0] * w1 * w1 + 3 * h1[1] / h1[0] * wp1 * w1 + wpp1 * w1 + wp1 * wp1 -
-            (   h2[2] / h2[0] * w2 * w2 + 3 * h2[1] / h2[0] * wp2 * w2 + wpp2 * w2 + wp2 * wp2 );
+        let B = - h2[1] / h2[0] + 0.5 * hx[1] / hx[0];
 
-        let C = y1 / (1 + h2[0] * w2 / (h1[0] * w1))  +  y2 / (1 + h1[0] * w1 / (h2[0] * w2));
-        C = x - C;
+        let C = 0.5 * SQR(hx[0]) * h2[2]  -  2 * hx[0] * hx[2] * h2[0]  -  2 * hx[0] * hx[1] * h2[1]  +  4 * SQR(hx[1]) * h2[0];
+        C -= C;
 
         return [A, B, C];
     }

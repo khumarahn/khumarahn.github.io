@@ -70,7 +70,7 @@
         </div>
         <div id='hn'></div>
 
-        <h3>Three conditions</h3>
+        <h3>Four conditions</h3>
         <div> Let \(h\) denote the density of the invariant measure and let \(w = 1 / T'\).
             For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of \(x\) under \(T\).
             Suppose that for each \(x\):
@@ -78,33 +78,34 @@
                 \Bigl[ \frac{h'}{h} w + w' \Bigr](y_1)
                 \leq \Bigl[ \frac{h'}{h} w + w' \Bigr](y_2)
                 \tag{C1}
+                ,
+            \]
+            \[
+                \frac{h'(y_2)}{h(y_2)}
+                \leq \frac{1}{2} \frac{h'(x)}{h(x)}
+                ,
+                \tag{C2}
             \]
             and
             \[
-                \Bigl[ \frac{h''}{h} w^2 + 3 \frac{h'}{h} w' w + w'' w + (w')^2 \Bigr](y_1)
-                \geq \Bigl[ \frac{h''}{h} w^2 + 3 \frac{h'}{h} w' w + w'' w + (w')^2 \Bigr](y_2)
-                .
-                \tag{C2}
-            \]
-            Suppose also that for all \(x\) on the second branch,
-            \[
-                x \geq \frac{y_1}{1 + \frac{h(y_2) w(y_2)}{h(y_1) w(y_1)}}
-                + \frac{y_2}{1 + \frac{h(y_1) w(y_1)}{h(y_2) w(y_2)}}
+                \frac{1}{2}h^2(x)  h''(y_2)   - 2 h(x) h''(x) h(y_2)  - 2h(x) h'(x) h'(y_2)  +  4h'^2(x) h(y_2)
+                \leq 0
                 .
                 \tag{C3}
             \]
+            Fourth condition is coming...
         </div>
         <div>
             If the three conditions above are satisfied, then there is an argument (which has to be checked!) that
             the cone of positive functions
             \[
                 \Bigl\{
-                v : \frac{v'}{v} \geq \frac{h'}{h}
+                v : (v / h)' \geq 0
                 \quad \text{and} \quad
-                \frac{v''}{v} \leq \frac{h''}{h}
+                (v / h)'' \leq 0
                 \Bigr\}
             \]
-            is invariant under iterations of \(L\), and that \( (L v)(x) \leq v(x) \)
+            is invariant under the normalized transfer operator \(v \mapsto \frac{L (hv)}{h}\), and that \( (L v)(x) \leq v(x) \)
             for all such \(v\) and \(x \in [1/2,1]\).
         </div>
         <div>
@@ -150,32 +151,6 @@
                     <span id='h12_error'></span>.
                 </li>
             </ul>
-        </div>
-        <h3>Appendix 4: Simplified conditions (C1)-(C3)</h3>
-        <div> The three conditions above can be written in a different way,
-            which seems simpler to verify numerically. Here we use that the second branch is exactly
-            \(2x - 1\). As before, let \(h\) denote the density of the invariant measure and let
-            \(w = 1 / T'\). For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of
-            \(x\) under \(T\). Then (C1) is equivalent to:
-            \[
-                \frac{h'(x)}{h(x)}
-                \leq \frac{1}{2} \frac{h'(y_2)}{h(y_2)}
-                \tag{C'1}
-                ,
-            \]
-            (C2) is equivalent to
-            \[
-                \frac{h''(x)}{h(x)}
-                \geq \frac{1}{4} \frac{h''(y_2)}{h(y_2)}
-                \tag{C'2}
-                ,
-            \]
-            and (C3) is equivalent to
-            \[
-                (x - y_1) h(x) \geq \frac{1}{2}(y_2 - y_1) h(y_2)
-                \tag{C'3}
-                .
-            \]
         </div>
 
         <script src="lsv.js"></script>
