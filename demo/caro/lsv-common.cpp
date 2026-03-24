@@ -125,6 +125,57 @@ class LSV : public BaseLSV {
                 return factor * hx + sum;
             }
         }
+        //
+        Vector2r f_abel(real_t x) {
+            const int n = Nstar();
+
+            // let y = f^{-n}(x) on the left branch, and let p = 1 / (f^n)'(y)
+            real_t y = x, p = 1;
+            for (int j = 0; j < n; j++) {
+                Vector2r yy = left_inv(y);
+                y = yy(0);
+                p *= yy(1);
+            }
+
+            Vector2r A = abel(y);
+
+            return Vector2r(
+                    A(0) - n,
+                    A(1) * p
+                    );
+        }
+        real_t full_abel(real_t x) {
+            return f_abel(x)(0);
+        }
+        real_t full_abel_p(real_t x) {
+            return f_abel(x)(1);
+        }
+        //
+        Vector2r f_abel_inv(real_t z) {
+            const int n = Nstar();
+
+            Vector2r AI = abel_inv(z + n);
+
+            real_t y = AI(0), p = 1;
+            for (int j = 0; j < n; j++) {
+                Vector2r yy = left(y);
+                y = yy(0);
+                p *= yy(1);
+            }
+
+            return Vector2r(
+                    y,
+                    AI(1) * p
+                    );
+        }
+        real_t full_abel_inv(real_t x) {
+            return f_abel_inv(x)(0);
+        }
+        real_t full_abel_inv_p(real_t x) {
+
+            return f_abel_inv(x)(1);
+        }
+        //
         real_t h(real_t x) const {
             return h_full(x)(0);
         }

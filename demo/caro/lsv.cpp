@@ -21,5 +21,9 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .function("R_evalues_imag", &LSV::R_evalues_imag)
         .function("R_cols", &LSV::R_cols)
         .function("R_coef", &LSV::R_coef)
-        .function("h_coef", &LSV::h_coef);
+        .function("h_coef", &LSV::h_coef)
+        .function("abel", &LSV::full_abel)
+        .function("abel_p", &LSV::full_abel_p)
+        .function("abel_inv", &LSV::full_abel_inv)
+        .function("abel_inv_p", &LSV::full_abel_inv_p);
 }

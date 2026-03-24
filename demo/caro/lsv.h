@@ -129,6 +129,7 @@ class LSV {
         int NCheb() const { return N_; };
         int prec() const { return PREC_; };
         int KAbel() const { return KAbel_; };
+        int Nstar() const { return Nstar_; };
         real_t alpha() const { return alpha_; };
         real_t gamma() const { return gamma_; };
         VectorXr abel_coef() const { return abel_coef_; };
