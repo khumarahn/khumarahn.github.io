@@ -33,6 +33,8 @@ class LSV {
         template <typename var_t>
             using Vector2 = Eigen::Matrix<var_t,2,1>;
         template <typename var_t>
+            using Vector3 = Eigen::Matrix<var_t,3,1>;
+        template <typename var_t>
             using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
         template <typename var_t>
             using MatrixX = Eigen::Matrix<var_t,Eigen::Dynamic,Eigen::Dynamic>;
@@ -40,6 +42,7 @@ class LSV {
             using func_t = std::function<var_t (var_t)>;
 
         typedef Vector2<real_t> Vector2r;
+        typedef Vector3<real_t> Vector3r;
         typedef VectorX<real_t> VectorXr;
         typedef MatrixX<real_t> MatrixXr;
         typedef func_t<real_t> real_func_t;
@@ -242,7 +245,7 @@ class LSV {
                 r += evaluate_branch_real(v0xn, dv0xn, 0.5);
 
                 // figure out Abel function of x and its derivative
-                Vector2r Av0xn = abel(v0xn);
+                Vector3r Av0xn = abel(v0xn);
                 real_t Ax = Av0xn(0) - Nstar_, dAx = Av0xn(1) * dv0xn;
 
                 // add the derivatives (all in one go)
@@ -289,31 +292,41 @@ class LSV {
         // satisfies A(left(x)) = A(x) - 1
         // We compute it with KAbel + 2 coefficients am1, al, a0, ..., a{KAbel-1}
         template <real_or_complex<real_t> var_t>
-        Vector2<var_t> abel(const var_t &x) const {
+        Vector3<var_t> abel(const var_t &x) const {
             var_t t = pow(x, -gamma_);
-            Vector2<var_t> A = abel_t(t);
-            return Vector2<var_t>(A(0), -gamma_ * (t / x) * A(1));
+            Vector3<var_t> A = abel_t(t);
+
+            var_t dt_dx = -gamma_ * (t / x);
+            var_t d2t_dx2 = gamma_ * (gamma_ + 1) * (t / (x * x));
+
+            var_t val = A(0);
+            var_t dval = A(1) * dt_dx;
+            var_t ddval = A(2) * (dt_dx * dt_dx) + A(1) * d2t_dx2;
+
+            return Vector3<var_t>(val, dval, ddval);
         }
         template <real_or_complex<real_t> var_t>
-        Vector2<var_t> abel_t(const var_t &t) const {
-            var_t A = abel_coef_(0) * t + abel_coef_(1) * log(t) + abel_coef_(2),
-                  dA = abel_coef_(0) + abel_coef_(1) / t;
-
+        Vector3<var_t> abel_t(const var_t &t) const {
+            var_t A = abel_coef_(0) * t + abel_coef_(1) * log(t) + abel_coef_(2);
             const var_t ti = var_t(1) / t;
+            var_t dA = abel_coef_(0) + abel_coef_(1) * ti;
+            var_t ddA = -abel_coef_(1) * ti * ti;
+
             var_t tj = ti;
             for (int j = 1; j <= KAbel_ - 1; j++) {
                 A += abel_coef_(2 + j) * tj;
                 tj *= ti;
                 dA -= var_t(j) * abel_coef_(2 + j) * tj;
+                ddA += var_t(j) * var_t(j + 1) * abel_coef_(2 + j) * (tj * ti);
             }
-            return Vector2<var_t>(A, dA);
+            return Vector3<var_t>(A, dA, ddA);
         }
 
         // inverse
         template <real_or_complex<real_t> var_t>
         Vector2<var_t> abel_t_inv(const var_t &a) const {
             var_t t = a / abel_coef_(0);
-            Vector2<var_t> A;
+            Vector3<var_t> A;
             for (int i=0; i < 1000; i++) {
                 A = abel_t(t);
                 if (abs(A(0) - a) < 100 * real_eps_) {

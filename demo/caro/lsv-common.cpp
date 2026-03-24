@@ -126,35 +126,58 @@ class LSV : public BaseLSV {
             }
         }
         //
-        Vector2r f_abel(real_t x) {
+        Vector3r f_abel(real_t x) {
             const int n = Nstar();
 
-            // let y = f^{-n}(x) on the left branch, and let p = 1 / (f^n)'(y)
-            real_t y = x, p = 1;
+            // Let y = f^{-n}(x) on the left branch.
+            // p = (f^{-n})'(x) and q = (f^{-n})''(x)
+            real_t y = x, p = 1.0, q = 0.0;
+
             for (int j = 0; j < n; j++) {
                 Vector2r yy = left_inv(y);
-                y = yy(0);
-                p *= yy(1);
+                real_t w = yy(0);       // new y
+                real_t h_p = yy(1);     // h'(old_y) = 1 / f'(w)
+
+                // f''(w) = (gamma + 1) * gamma * (2w)^(gamma - 1) * 2
+                real_t f_pp = (gamma() + 1) * gamma() * pow(2 * w, gamma() - 1) * 2;
+
+                // h''(old_y) = -f''(w) / (f'(w))^3 = -f''(w) * (h_p)^3
+                real_t h_pp = -f_pp * h_p * h_p * h_p;
+
+                // Chain rule for the next step:
+                // y_{new}'' = h''(y_{old}) * (y_{old}')^2 + h'(y_{old}) * y_{old}''
+                q = h_pp * p * p + h_p * q;
+
+                // y_{new}' = h'(y_{old}) * y_{old}'
+                p *= h_p;
+
+                y = w;
             }
 
-            Vector2r A = abel(y);
+            Vector3r A = abel(y);
 
-            return Vector2r(
+            return Vector3r(
                     A(0) - n,
-                    A(1) * p
-                    );
+                    A(1) * p,
+                    A(2) * p * p + A(1) * q
+            );
         }
+
         real_t full_abel(real_t x) {
             return f_abel(x)(0);
         }
         real_t full_abel_p(real_t x) {
             return f_abel(x)(1);
         }
+        real_t full_abel_pp(real_t x) {
+            return f_abel(x)(2);
+        }
         //
         Vector2r f_abel_inv(real_t z) {
             const int n = Nstar();
+            real_t zn = z + n;
 
-            Vector2r AI = abel_inv(z + n);
+            Vector2r AI = abel_inv(zn);
 
             real_t y = AI(0), p = 1;
             for (int j = 0; j < n; j++) {
@@ -176,6 +199,39 @@ class LSV : public BaseLSV {
             return f_abel_inv(x)(1);
         }
         //
+        // Combined method for w(x) and w'(x) to reuse Abel evaluations
+        Vector2r w_full(real_t x) {
+            // y = A^{-1}(x)
+            real_t y = full_abel_inv(x);
+            // z = 2y - 1
+            real_t z = 2 * y - 1;
+
+            // Evaluate A, A', A'' at y and z
+            Vector3r Ay = f_abel(y);
+            Vector3r Az = f_abel(z);
+
+            real_t Ay_p = Ay(1);
+            real_t Ay_pp = Ay(2);
+
+            real_t Az_p = Az(1);
+            real_t Az_pp = Az(2);
+
+            // w(x) = A'(y) / (2 * A'(z))
+            real_t w_val = Ay_p / (2.0 * Az_p);
+
+            // w'(x) = (A''(y)*A'(z) - 2*A'(y)*A''(z)) / (2 * A'(y) * (A'(z))^2)
+            real_t w_deriv = (Ay_pp * Az_p - 2 * Ay_p * Az_pp) / (2 * Ay_p * Az_p * Az_p);
+
+            return Vector2r(w_val, w_deriv);
+        }
+
+        real_t w(real_t x) {
+            return w_full(x)(0);
+        }
+
+        real_t w_p(real_t x) {
+            return w_full(x)(1);
+        }
         real_t h(real_t x) const {
             return h_full(x)(0);
         }

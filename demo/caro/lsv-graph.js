@@ -36,11 +36,9 @@ function alphaChange() {
 
     let v = new Function('x', 'return ' + document.getElementById("v").value);
 
-    Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0.0, 2.0]}, xaxis: {range: [0,1], dtick: 0.125}});
+    Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0, 1.25]}, xaxis: {range: [0,6], rangemode: 'tozero'}});
 
-    let h = compute_h();
-    Plotly.newPlot('hn', h[0], { yaxis: {range: [-24.0, 24.0]}, xaxis: {range: [0,1], dtick: 0.125}});
-    Plotly.newPlot('hph', h[1], { yaxis: {autoscale: true}, xaxis: {range: [0,1], dtick: 0.125}});
+    Plotly.newPlot('hn', compute_abel_h(), { yaxis: {autorange: true, rangemode: 'tozero'}, xaxis: {autorange: true, rangemode: 'tozero'}});
     Plotly.newPlot('ccc', four_conditions(), { yaxis: {type: 'log', autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
     Plotly.newPlot('qqq', q1q2(), { yaxis: {autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
 
@@ -106,9 +104,11 @@ function computeLv(v, n) {
             name: 'L^'+k.toString()+' v',
             visible: 'legendonly'
         };
-        for (let x = 0.0; x <= 1.0; x += 1./128) {
-            trace.x.push(x);
-            trace.y.push(LSV_Ln(v, x, alpha, k));
+        for (let u = 1./16; u <= 12.0; u += 1./128) {
+            let x = lsv_cpp.abel_inv(u),
+                p = - lsv_cpp.abel_inv_p(u);
+            trace.x.push(u);
+            trace.y.push(LSV_Ln(v, x, alpha, k) * p);
         }
         traces.push(trace);
     }
@@ -159,6 +159,23 @@ function compute_h() {
         hpph.y.push(x * x * lsv_cpp.h_pp(x) / lsv_cpp.h(x));
     }
     return [[h, hp, hpp], [hph, hpph]];
+}
+
+function compute_abel_h() {
+    let h_A = {
+        x: [],
+        y: [],
+        name: 'h_A'
+    };
+    for (let u = 1./16; u <= 12.0; u += 1./32) {
+        let x = lsv_cpp.abel_inv(u),
+            p = - lsv_cpp.abel_inv_p(u);
+
+        h_A.x.push(u);
+        h_A.y.push(lsv_cpp.h(x) * p);
+    }
+    return [h_A];
+
 }
 
 function four_conditions() {
