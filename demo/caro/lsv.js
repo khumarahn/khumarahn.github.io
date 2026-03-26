@@ -42,7 +42,7 @@ function LSV_left_ppp(x, alpha) {
     let gamma = 1. / alpha;
     return (gamma - 1) * gamma * (gamma + 1) * Math.pow(2, gamma) * Math.pow(x, gamma - 2);
 }
-function LSV_left_ppp(x, alpha) {
+function LSV_right_ppp(x, alpha) {
     return 0;
 }
 
