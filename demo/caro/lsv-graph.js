@@ -108,7 +108,7 @@ function computeLv(v, n) {
             let x = lsv_cpp.abel_inv(u),
                 p = - lsv_cpp.abel_inv_p(u);
             trace.x.push(u);
-            trace.y.push(LSV_Ln(v, x, alpha, k) * p);
+            trace.y.push(LSV_Ln(v, x, alpha, k) * p / abel_h(u));
         }
         traces.push(trace);
     }
@@ -161,6 +161,13 @@ function compute_h() {
     return [[h, hp, hpp], [hph, hpph]];
 }
 
+function abel_h(u) {
+    let x = lsv_cpp.abel_inv(u),
+        p = - lsv_cpp.abel_inv_p(u);
+
+    return lsv_cpp.h(x) * p;
+}
+
 function compute_abel_h() {
     let h_A = {
         x: [],
@@ -168,11 +175,8 @@ function compute_abel_h() {
         name: 'h_A'
     };
     for (let u = 1./16; u <= 12.0; u += 1./32) {
-        let x = lsv_cpp.abel_inv(u),
-            p = - lsv_cpp.abel_inv_p(u);
-
         h_A.x.push(u);
-        h_A.y.push(lsv_cpp.h(x) * p);
+        h_A.y.push(abel_h(u));
     }
     return [h_A];
 
