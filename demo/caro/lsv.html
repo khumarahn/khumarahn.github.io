@@ -51,9 +51,10 @@
         </div>
         <div>
             We would like to prove that \(L^n v\) is monotone on \([1/2,1]\) in the sense that
+            for some \(\delta &gt; 0\)
             \[
                 (L^{n+1}v)(x) \leq (L^n v)(x)
-                \quad \text{for all } n \geq 0 \text{ and } x \in [1/2,1]
+                \quad \text{for all } n \geq 0 \text{ and } x \in [1 - \delta, 1]
             \]
             But how?
         </div>
@@ -70,7 +71,7 @@
         </div>
         <div id='hn'></div>
 
-        <h3>Three conditions</h3>
+        <h3>Two conditions</h3>
         <div> Let \(h\) denote the density of the invariant measure and let \(w = 1 / T'\).
             For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of \(x\) under \(T\).
             Suppose that for each \(x\):
@@ -86,16 +87,9 @@
                 .
                 \tag{C2}
             \]
-            Suppose also that for all \(x\) on the second branch,
-            \[
-                x \geq \frac{y_1}{1 + \frac{h(y_2) w(y_2)}{h(y_1) w(y_1)}}
-                + \frac{y_2}{1 + \frac{h(y_1) w(y_1)}{h(y_2) w(y_2)}}
-                .
-                \tag{C3}
-            \]
         </div>
         <div>
-            If the three conditions above are satisfied, then there is an argument (which has to be checked!) that
+            If the conditions above are satisfied, then there is an argument (which has to be checked!) that
             the cone of positive functions
             \[
                 \Bigl\{
@@ -104,12 +98,14 @@
                 \frac{v''}{v} \leq \frac{h''}{h}
                 \Bigr\}
             \]
-            is invariant under iterations of \(L\), and that \( (L v)(x) \leq v(x) \)
-            for all such \(v\) and \(x \in [1/2,1]\).
+            is invariant under iterations of \(L\).
+            Further, there exists a \(\delta &gt; 0\) such that 
+            \( (L v)(x) \leq v(x) \)
+            for all such \(v\) and \(x \in [1 - \delta, 1]\).
         </div>
         <div>
             It is not clear however how to verify these conditions. But we can compute an approximation for \(h\) and plot some graphs.
-            Below C1, C2 and C3 are the differences of the two sides in corresponding conditions, taken so that positive values
+            Below C1 and C2 are the differences of the two sides in corresponding conditions, taken so that positive values
             mean that the condition holds.
         </div>
         <div id='ccc'></div>
@@ -151,8 +147,8 @@
                 </li>
             </ul>
         </div>
-        <h3>Appendix 4: Simplified conditions (C1)-(C3)</h3>
-        <div> The three conditions above can be written in a different way,
+        <h3>Appendix 4: Simplified conditions</h3>
+        <div> The conditions above can be written in a different way,
             which seems simpler to verify numerically. Here we use that the second branch is exactly
             \(2x - 1\). As before, let \(h\) denote the density of the invariant measure and let
             \(w = 1 / T'\). For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of
@@ -168,12 +164,6 @@
                 \frac{h''(x)}{h(x)}
                 \geq \frac{1}{4} \frac{h''(y_2)}{h(y_2)}
                 \tag{C'2}
-                ,
-            \]
-            and (C3) is equivalent to
-            \[
-                (x - y_1) h(x) \geq \frac{1}{2}(y_2 - y_1) h(y_2)
-                \tag{C'3}
                 .
             \]
         </div>

@@ -216,7 +216,8 @@ function three_conditions(N) {
             c3.y.push(c[2]);
         }
     }
-    return [c1, c2, c3];
+    //return [c1, c2, c3];
+    return [c1, c2];
 }
 
 let Lv_loop_n = 0;
