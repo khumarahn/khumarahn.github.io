@@ -2,10 +2,6 @@
 
 let alpha = 0.75;
 
-function SQR(x) {
-    return x * x;
-}
-
 function lsv_trace() {
     let trace = {
         x: [],
@@ -36,11 +32,14 @@ function alphaChange() {
 
     let v = new Function('x', 'return ' + document.getElementById("v").value);
 
-    Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0, 1.25]}, xaxis: {range: [0,6], rangemode: 'tozero'}});
+    Plotly.newPlot('Ln', computeLv(v,10), { yaxis: {range: [0.0, 2.0]}, xaxis: {range: [0,1], dtick: 0.125}});
 
-    Plotly.newPlot('hn', compute_abel_h(), { yaxis: {autorange: true, rangemode: 'tozero'}, xaxis: {autorange: true, rangemode: 'tozero'}});
-    Plotly.newPlot('ccc', four_conditions(), { yaxis: {type: 'log', autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
-    Plotly.newPlot('qqq', q1q2(), { yaxis: {autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
+    let h = compute_h();
+    Plotly.newPlot('hn', h[0], { yaxis: {range: [-24.0, 24.0]}, xaxis: {range: [0,1], dtick: 0.125}});
+    Plotly.newPlot('hph', h[1], { yaxis: {autoscale: true}, xaxis: {range: [0,1], dtick: 0.125}});
+
+    Plotly.newPlot('ccc', three_conditions(14), { yaxis: {type: 'log', autorange: true}, xaxis: {range: [0,1], dtick: 0.125}});
+
 
     let R_cols = lsv_cpp.R_cols();
     document.getElementById("R_cols").innerHTML = R_cols.toString() + "x" + R_cols.toString();
@@ -104,11 +103,9 @@ function computeLv(v, n) {
             name: 'L^'+k.toString()+' v',
             visible: 'legendonly'
         };
-        for (let u = 1./16; u <= 12.0; u += 1./128) {
-            let x = lsv_cpp.abel_inv(u),
-                p = - lsv_cpp.abel_inv_p(u);
-            trace.x.push(u);
-            trace.y.push(LSV_Ln(v, x, alpha, k) * p / abel_h(u));
+        for (let x = 0.0; x <= 1.0; x += 1./128) {
+            trace.x.push(x);
+            trace.y.push(LSV_Ln(v, x, alpha, k));
         }
         traces.push(trace);
     }
@@ -161,97 +158,32 @@ function compute_h() {
     return [[h, hp, hpp], [hph, hpph]];
 }
 
-function abel_h(u) {
-    let x = lsv_cpp.abel_inv(u),
-        p = - lsv_cpp.abel_inv_p(u);
-
-    return lsv_cpp.h(x) * p;
-}
-
-function compute_abel_h() {
-    let h_A = {
-        x: [],
-        y: [],
-        name: 'h_A'
-    };
-    for (let u = 1./16; u <= 12.0; u += 1./32) {
-        h_A.x.push(u);
-        h_A.y.push(abel_h(u));
-    }
-    return [h_A];
-
-}
-
-function four_conditions() {
+function three_conditions(N) {
     function h(x) {
         return [lsv_cpp.h(x), lsv_cpp.h_p(x), lsv_cpp.h_pp(x)];
     }
     function COND(x) {
         let y1 = LSV_left_i(x, alpha),
             y2 = LSV_right_i(x, alpha),
-            //
-            hx = lsv_cpp.h(x),
-            hpx = lsv_cpp.h_p(x),
-            hppx = lsv_cpp.h_pp(x),
-            //
-            h1 = lsv_cpp.h(y1),
-            hp1 = lsv_cpp.h_p(y1),
-            hpp1 = lsv_cpp.h_pp(y1),
-            //
-            h2 = lsv_cpp.h(y2),
-            hp2 = lsv_cpp.h_p(y2),
-            hpp2 = lsv_cpp.h_pp(y2),
-            //
+            h1 = h(y1),
+            h2 = h(y2),
             w1 = LSV_left_w(y1, alpha),
-            wp1 = LSV_left_wp(y1, alpha),
-            wpp1 = LSV_left_wpp(y1, alpha),
-            //
             w2 = LSV_right_w(y2, alpha),
+            wp1 = LSV_left_wp(y1, alpha),
             wp2 = LSV_right_wp(y2, alpha),
-            wpp2 = LSV_right_wpp(y2, alpha),
-            //
-            q1 = w1 * h1 / hx,
-            q2 = w2 * h2 / hx,
-            //
-            qp1 = (
-                (hp1 * w1 + h1 * wp1) / hx
-                - h1 * hpx / (hx * hx)
-            ),
-            qp2 = (
-                (hp2 * w2 + h2 * wp2) / hx
-                - h2 * hpx / (hx * hx)
-            ),
-            qpp1 = (
-                (hpp1 * w1 + 2 * hp1 * wp1 + h1 * wpp1) / hx 
-                - ( 2 * hp1 * w1 * hpx + h1 * wp1 * hpx + h1 * hppx) / (hx * hx * w1)
-                + 2 * h1 * hpx * hpx / (hx * hx * hx * w1)
-            ),
-            qpp2 = (
-                (hpp2 * w2 + 2 * hp2 * wp2 + h2 * wpp2) / hx 
-                - ( 2 * hp2 * w2 * hpx + h2 * wp2 * hpx + h2 * hppx) / (hx * hx * w2)
-                + 2 * h2 * hpx * hpx / (hx * hx * hx * w2)
-            );
+            wpp1 = LSV_left_wpp(y1, alpha),
+            wpp2 = LSV_right_wpp(y2, alpha);
 
-        let A = y1 / (1 + h2 * w2 / (h1 * w1))  +  y2 / (1 + h1 * w1 / (h2 * w2));
-        A = x - A;
+        let A = h1[1] / h1[0] * w1 + wp1 - (h2[1] / h2[0] * w2 + wp2);
+        A = -A;
 
-        let B = qp2;
+        let B = h1[2] / h1[0] * w1 * w1 + 3 * h1[1] / h1[0] * wp1 * w1 + wpp1 * w1 + wp1 * wp1 -
+            (   h2[2] / h2[0] * w2 * w2 + 3 * h2[1] / h2[0] * wp2 * w2 + wpp2 * w2 + wp2 * wp2 );
 
-        let C = - qpp2;
+        let C = y1 / (1 + h2[0] * w2 / (h1[0] * w1))  +  y2 / (1 + h1[0] * w1 / (h2[0] * w2));
+        C = x - C;
 
-        let D = - (
-            + (2 * qp1 * w1 + q1 * wp1) * w1
-            + (2 * qp2 * w2 + q2 * wp2) * w2
-        );
-
-        let E1 = qp1 * w1 + qp2 * w2;
-
-        let E2 = (
-            + (qpp1 * w1 + qp1 * wp1) * w1
-            + (qpp2 * w2 + qp2 * wp2) * w2
-        );
-
-        return [A, B, C, D];
+        return [A, B, C];
     }
 
     let c1 = {
@@ -269,74 +201,22 @@ function four_conditions() {
         y: [],
         name: 'C3'
     };
-    let c4 = {
-        x: [],
-        y: [],
-        name: 'C4'
-    };
 
     for (let x = 1./16; x <= 1.0; x += 1./128) {
         let c = COND(x);
 
-        if (x >= 0.5) {
-            c1.x.push(x);
-            c1.y.push(c[0]);
-        }
+        c1.x.push(x);
+        c1.y.push(c[0]);
 
         c2.x.push(x);
         c2.y.push(c[1]);
 
-        c3.x.push(x);
-        c3.y.push(c[2]);
-
-        c4.x.push(x);
-        c4.y.push(c[3]);
+        if (x >= 0.5) {
+            c3.x.push(x);
+            c3.y.push(c[2]);
+        }
     }
-    return [c1, c2, c3, c4];
-}
-
-function q1q2() {
-    function QQ(x) {
-        let y1 = LSV_left_i(x, alpha),
-            y2 = LSV_right_i(x, alpha),
-            //
-            hx = lsv_cpp.h(x),
-            //
-            h1 = lsv_cpp.h(y1),
-            //
-            h2 = lsv_cpp.h(y2),
-            //
-            w1 = LSV_left_w(y1, alpha),
-            //
-            w2 = LSV_right_w(y2, alpha),
-            //
-            q1 = w1 * h1 / hx,
-            q2 = w2 * h2 / hx;
-
-        return [y1, q1, y2, q2];
-    }
-
-    let c1 = {
-        x: [],
-        y: [],
-        name: 'q(x) (left)'
-    };
-    let c2 = {
-        x: [],
-        y: [],
-        name: 'q(x) (right)'
-    };
-
-    for (let x = 1./16; x <= 1.0; x += 1./128) {
-        let c = QQ(x);
-
-        c1.x.push(c[0]);
-        c1.y.push(c[1]);
-
-        c2.x.push(c[2]);
-        c2.y.push(c[3]);
-    }
-    return [c1, c2];
+    return [c1, c2, c3];
 }
 
 let Lv_loop_n = 0;
