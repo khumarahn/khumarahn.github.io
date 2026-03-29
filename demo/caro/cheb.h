@@ -12,7 +12,9 @@ namespace cheb_ns {
 using std::atan;
 using std::cos;
 using std::acos;
+using std::asin;
 using std::pow;
+using std::sqrt;
 
 template <typename T, typename... TArgs>
 concept type_one_of = (std::same_as<T, TArgs> || ...);
@@ -65,7 +67,7 @@ class Cheb {
             set_abN(a, b, N);
 
             // compute a vector of values of f
-            Cheb::VectorXr f_val(N_);
+            VectorXr f_val(N_);
             for (int k = 0; k < N_; k++)
                 f_val(k) = f(cos(pi_ * (k + half_) * Ni_) * bma2_ + bpa2_);
 
@@ -122,29 +124,32 @@ class Cheb {
             return value(x);
         }
 
-        // trigonometric computation of value when coef = (0,...,0,1,0,...,0),
-        // with 1 at index n
-        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
-        var_t basis_value_trig(const var_t &x, int n) const {
-            var_t y = (x - bpa2_) / bma2_,
-                  a = acos(y),
-                  an = a * var_t(n);
-            return (n==0) ? half_ : cos(an);
-        }
-        // trigonometric computation of value at fist N basis vectors
-        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
-        VectorX<var_t> basis_values_trig(const var_t &x, int N) const {
-            VectorX<var_t> ret = VectorX<var_t>::Zero(N);
+        // A trigonometric computation of values of basis vectors that should be
+        // accurate for x near:
+        //  * a if s = -1
+        //  * b if s = +1
+        VectorXc basis_values_trig(const complex_t &x, int N, int s = -1) const {
+            assert(s == -1 || s == 1);
+            VectorXc ret = VectorXc::Zero(N);
             ret(0) = half_;
 
-            const var_t y = (x - bpa2_) / bma2_,
-                  a = acos(y);
-            var_t an = a;
+            real_t ss(s);
+            const complex_t y = (x - bpa2_) / bma2_,
+                  z = real_t(2) * asin(sqrt((real_t(1) - ss * y) / real_t(2)));
             for (int j = 1; j < N; j++) {
-                ret(j) = cos(an);
-                an += a;
+                ret(j) = ss * cos(real_t(j) * z);
+                ss *= s;
             }
             return ret;
+        }
+        // ... and a real version
+        VectorXr basis_values_trig(const real_t &x, int N, int s = -1) const {
+            VectorXc v = basis_values_trig(complex_t(x), N, s);
+            VectorXr r(N);
+
+            for (int j = 0; j < N; j++)
+                r(j) = v(j).real();
+            return r;
         }
         // optimized computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
@@ -162,7 +167,7 @@ class Cheb {
             }
             return y * d - dd + ((n == 0) ? half_ : var_t(0));
         }
-        // optimized computation of value at fist N basis vectors
+        // optimized computation of value at first N basis vectors
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         VectorX<var_t> basis_values(const var_t &x, int N) const {
             VectorX<var_t> ret = VectorX<var_t>::Zero(N);
@@ -271,7 +276,7 @@ class Cheb {
             }
             return r;
         }
-};
+}; // class Cheb
 
 template <typename real_t>
 const real_t Cheb<real_t>::pi_ = 4 * atan(real_t(1));

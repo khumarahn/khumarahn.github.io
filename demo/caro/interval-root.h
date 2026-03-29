@@ -126,7 +126,7 @@ bool proper_subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
 //      interval_t -> Vector2<interval_t>
 // where the 0th component of the vector is the function value,
 // and the 1st component is the derivative.
-// The second component is an interval containing a root.
+// The second argument is an interval containing a root.
 //
 // We terminate when the interval stops changing. We return the solution
 // and the inverse derivative.
