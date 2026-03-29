@@ -8,6 +8,7 @@
 
 #include <complex>
 #include <Eigen/Core>
+#include <Eigen/Dense>
 
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/multiprecision/mpfi.hpp>
@@ -144,11 +145,12 @@ Vector2i<d10> interval_newton(const f_t &f, const interval_t<d10> &guess) {
 
         i_t m = bmp::median(Y);
         i_t Z = m - f(m)(0) / P;
+        i_t ZZ = bmp::intersect(Z, Y); // is this needed?
 
-        if (!bmp::proper_subset(Z,Y))
+        if (!bmp::proper_subset(ZZ,Y))
             break;
 
-        Y = Z;
+        Y = ZZ;
     }
 
     // Sanity check: image of the returned interval contains zero
@@ -185,7 +187,7 @@ Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &gue
              K = y - Y * f(y)(0) + (ci_t(1) - Y * fpX) * Z;
 
         assert(overlap(X, K));
-        complex_interval_t XX = intersect(X, K);
+        ci_t XX = intersect(X, K);
 
         if (!proper_subset(XX,X)) {
             break;
@@ -254,14 +256,13 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     assert(subset(b, Vi_t(A * X)));
 
     for (;;) {
-        Vi_t XX = Y * b + E * X;
+        Vi_t XX = Y * b + E * X,
+             XXX = intersect(X, XX);
 
-        X = intersect(X, XX);
-
-        if (!proper_subset(XX,X)) {
+        if (!proper_subset(XXX,X)) {
             break;
         }
-        X = XX;
+        X = XXX;
     }
 
     //std::cout << "Linear Kraw, error norm: " << norm(A * X - b) << "\n";

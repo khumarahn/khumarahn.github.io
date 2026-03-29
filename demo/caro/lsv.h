@@ -325,14 +325,15 @@ class LSV {
         // This returns an approximation of the induced transfer operator by an
         // N_ by N_ matrix acting on the Chebyshev coefficients
         MatrixXi Lind() const {
-            interval_cheb_t cheb(0.5, 1.0, N_);
+            interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
 
             const VectorXi x_nodes = cheb.nodes();
             assert(x_nodes.size() == N_);
 
-            // values of first N Chebyshev polynomials at a point
-            auto v = [&cheb, N = N_]<typename var_t>(const var_t &x) {
-                VectorX<var_t> r = cheb.basis_values_trig(x, N);
+            // values of first N Chebyshev polynomials at a preimage on [1/2,1]
+            auto v = [this, &cheb, N = N_]<typename var_t>(const var_t &x) {
+                var_t y = right_inv(x)(0);
+                VectorX<var_t> r = cheb.basis_values_trig(y, N);
                 r(0) *= 2; // undo halving T_1(x)
                 return r;
             };
@@ -351,7 +352,7 @@ class LSV {
                 r += - 2 * Ax(1) * bi;
 
                 // \varphi(z) / 2
-                r += v(right_inv(x)(0));
+                r += v(x);
 
                 { // derivatives
                     const VectorXci &s = derivatives_s_;
@@ -360,7 +361,7 @@ class LSV {
                     VectorXi der = VectorXi::Zero(N);
                     for (int m = 1; m <= halfM_; m++) {
                         complex_interval_t xm = abel_inv(Ax(0) + s(m-1))(0);
-                        der += ( c(m-1) * v(right_inv(xm)(0)) / abel(xm)(1) ).real();
+                        der += ( c(m-1) * v(xm) / abel(xm)(1) ).real();
                     }
 
                     der *= - 2 * Ax(1) / M_;
@@ -424,7 +425,7 @@ class LSV {
 
                 for (int k = 0; k < Nstar_; k++) {
                     std::cout << "TROLL: " << k << " :: "
-                        << "xk: " << bmp::width(xk)
+                        << "xk: " << xk << " [" << bmp::width(xk) << "]"
                         << ", Jk: " << bmp::width(Jk)
                         << ", v(xk): " << uncertainty(v(xk))
                         << ", r: " << uncertainty(r)

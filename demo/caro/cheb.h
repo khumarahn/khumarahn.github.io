@@ -124,32 +124,18 @@ class Cheb {
             return value(x);
         }
 
-        // A trigonometric computation of values of basis vectors that should be
-        // accurate for x near:
-        //  * a if s = -1
-        //  * b if s = +1
-        VectorXc basis_values_trig(const complex_t &x, int N, int s = -1) const {
-            assert(s == -1 || s == 1);
-            VectorXc ret = VectorXc::Zero(N);
+        // A trigonometric computation of values of basis vectors,
+        // does not work on real line outside [-1,1]
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        VectorX<var_t> basis_values_trig(const var_t &x, int N) const {
+            VectorX<var_t> ret(N);
             ret(0) = half_;
-
-            real_t ss(s);
-            const complex_t y = (x - bpa2_) / bma2_,
-                  z = real_t(2) * asin(sqrt((real_t(1) - ss * y) / real_t(2)));
+            const var_t y = (x - bpa2_) / bma2_,
+                  z = acos(y);
             for (int j = 1; j < N; j++) {
-                ret(j) = ss * cos(real_t(j) * z);
-                ss *= s;
+                ret(j) = cos(real_t(j) * z);
             }
             return ret;
-        }
-        // ... and a real version
-        VectorXr basis_values_trig(const real_t &x, int N, int s = -1) const {
-            VectorXc v = basis_values_trig(complex_t(x), N, s);
-            VectorXr r(N);
-
-            for (int j = 0; j < N; j++)
-                r(j) = v(j).real();
-            return r;
         }
         // optimized computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
