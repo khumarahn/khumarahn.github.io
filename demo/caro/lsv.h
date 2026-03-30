@@ -86,6 +86,7 @@ class LSV {
         typedef Cheb<interval_t> interval_cheb_t;
     private:
         static const interval_t e_;
+        static const interval_extra_t e_x_;
         static const interval_t pi_;
         static const interval_extra_t pi_x_;
         static const real_t real_eps_;
@@ -332,7 +333,7 @@ class LSV {
 
             // values of first N Chebyshev polynomials at a preimage on [1/2,1]
             auto v = [this, &cheb, N = N_]<typename var_t>(const var_t &x) {
-                var_t y = right_inv(x)(0);
+                var_t y = this->right_inv(x)(0);
                 VectorX<var_t> r = cheb.basis_values_trig(y, N);
                 r(0) *= 2; // undo halving T_1(x)
                 return r;
@@ -340,19 +341,21 @@ class LSV {
 
             // for a **small** real x, return a rigorous approximation of S(z) = S(x^\gamma)
             // for the vector-valued observable of first N Chebyshev polynomials
-            auto S = [this, &cheb, &v, N = N_](const interval_t &x) -> VectorXi {
+            auto S_small = [this, &cheb, &v, N = N_](const interval_t &x) -> VectorXi {
                 // FIXME: what happens to the first Chebyshev polynomial, which is either halved or doubled?
                 interval_t z = pow(x, gamma_);
                 VectorXi r = VectorXi::Zero(N);
-                VectorXi Ax = abel(x);
+                VectorXi Ax = this->abel(x);
 
-                // integral
-                VectorXi bi = cheb.beta_integral(0, (x + 1) / 2, N);
-                bi(0) *= 2; // undo halving T_1(x)
-                r += - 2 * Ax(1) * bi;
+                { // integral
+                    interval_t y = this->right_inv(x)(0);
+                    VectorXi bi = cheb.beta_integral(0, y, N);
+                    bi(0) *= 2; // undo halving T_1(x)
+                    r += - 2 * Ax(1) * bi;
+                }
 
                 // \varphi(z) / 2
-                r += v(x);
+                r += v(x) / real_t(2);
 
                 { // derivatives
                     const VectorXci &s = derivatives_s_;
@@ -368,8 +371,10 @@ class LSV {
                     r += der;
                 }
 
-                { // error FIXME: Make this independent of x
-                    interval_t nu = Ax(0) - abel_r1_;
+                { // error term
+                  // FIXME: Make this independent of x
+                    interval_t nu = Ax(0) - abel_t(abel_r1_)(0);
+                    assert(nu > 0);
 
                     interval_t Lfac = 1;
                     for (int ell = 1; ell <= 2 * L_ + 1; ell++)
@@ -412,53 +417,44 @@ class LSV {
                 }
 
                 return r;
-            };
+            }; // S_small
 
-            MatrixXi L_values(N_, N_);
-#pragma omp parallel for schedule(dynamic)
-            for (int ix = 0; ix < x_nodes.size(); ix++) {
-                interval_t x = x_nodes[ix];
-                VectorXi r = VectorXi::Zero(N_);
+            // now compute S when x is not necessarily small
+            auto S = [this, &S_small, &v, N = N_](const interval_t &x) -> VectorXi {
+                VectorXi r = VectorXi::Zero(N);
+
+                interval_t xk = x,
+                           Jk = 1;
 
                 // add branches naively up to Nstar
-                interval_t xk = x, Jk = 1;
-
                 for (int k = 0; k < Nstar_; k++) {
-                    std::cout << "TROLL: " << k << " :: "
-                        << "xk: " << xk << " [" << bmp::width(xk) << "]"
-                        << ", Jk: " << bmp::width(Jk)
-                        << ", v(xk): " << uncertainty(v(xk))
-                        << ", r: " << uncertainty(r)
-                        << "\n"
-                        << "%% ";
-                    //for (int t = 0; t < v(xk).size(); t++)
-                    //    std::cout << bmp::width(v(xk)(t)) << "  ";
-                    //std::cout << "\n";
-
                     r += v(xk) * Jk;
                     Vector2i y = left_inv(xk);
                     xk = y(0);
                     Jk *= y(1);
                 }
 
-                r += S(xk) * Jk;
+                // add the rest when xk is small
+                r += S_small(xk) * Jk;
+                return r;
+            };
 
-                L_values.col(ix) = r;
+            // Compute L v for first N Chebyshev polynomials at
+            // the node points
+            MatrixXi L_values(N_, N_);
+#pragma omp parallel for schedule(dynamic)
+            for (int ix = 0; ix < x_nodes.size(); ix++) {
+                interval_t x = x_nodes[ix];
+                L_values.col(ix) = S(x) / real_t(2);
             }
 
+            // Approximate the result with Chebyshev polynomials
             MatrixXi R(N_, N_);
             {
                 interval_cheb_t c(interval_t(1) / 2, 1, N_);
                 for (int k = 0; k < N_; k++) {
                     c.set_from_values(L_values.row(k).transpose());
                     VectorXi cc = c.coef();
-                    std::cout << "ROCK: " << k
-                        << " :: " << uncertainty(L_values.col(k))
-                        << "\n";
-                    std::cout << "ROLL: " << k
-                        << " :: " << uncertainty(L_values.row(k).transpose())
-                        << " --vs-- " << uncertainty(cc)
-                        << "\n";
                     cc(0) /= 2; // undo halving T_1(x)
                     R.col(k) = cc;
                 }
@@ -692,23 +688,23 @@ void LSV<PREC>::compute_abel_stuff() {
         ix_t Ar1 = abel_t(ix_t(r1), x_coef)(0);
         ix_t x = 1, t = 1;
 
-        for (Nstar_ = 0; ; Nstar_++) {
+        for (Nstar_ = 1; ; Nstar_++) {
             x = left_inv(x)(0);
             t = pow(x, -gamma_);
-            rx_t At = bmp::lower(abel_t(t, x_coef)(0));
 
             // unremarkable, but we set the number of derivatives L here
             L_ = 1 + Nstar_ / 2;
 
-            // FIXME!! Remove +20, figure out what to do
-            rx_t min_At = 20 +  bmp::upper(
-                    Ar1 + ix_t(L_) / (exp(ix_t(1)) * pi_x_ * varkappa1)
+            // +20 is arbitrary: we need \nu suffuciently large
+            rx_t min_At = 20 + bmp::upper(
+                    Ar1 + ix_t(L_) / (e_x_ * pi_x_ * varkappa1)
                     );
-            if (    abel_t_in_range(t)
-                    && bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)
-                    && At > min_At   ) {
-                t_Nstar = t;
-                break;
+            if (abel_t_in_range(t)  &&  bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)) {
+                rx_t At = bmp::lower(abel_t(t, x_coef)(0));
+                if (At > min_At) {
+                    t_Nstar = t;
+                    break;
+                }
             }
         }
     }
@@ -765,6 +761,8 @@ void LSV<PREC>::compute_abel_stuff() {
     assert( abel_am1_minus_C1_ > 0 );
     assert( abel_nu_ > 0 );
 
+    assert(2 * pi_ * e_ * abel_nu_ * abel_varkappa1_ > 2 * L_ - 1);
+
     return;
 }
 
@@ -801,6 +799,8 @@ LSV<PREC>::MatrixXix LSV<PREC>::abel_matrix() const {
 
 template <int PREC>
 const LSV<PREC>::interval_t LSV<PREC>::e_ = exp(interval_t(1));
+template <int PREC>
+const LSV<PREC>::interval_extra_t LSV<PREC>::e_x_ = exp(interval_extra_t(1));
 
 template <int PREC>
 const LSV<PREC>::interval_t LSV<PREC>::pi_ = 4 * atan(interval_t(1));
