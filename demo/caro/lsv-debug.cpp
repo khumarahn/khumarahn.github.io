@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 48;   // in bits
+const int PREC = 128;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -44,7 +44,7 @@ int main() {
         return err;
     };
 
-    for (real_t gamma = 0.75; gamma <= 0.75; gamma += 0.25) {
+    for (real_t gamma = real_t(4) / 3; gamma <= 5; gamma += 50) {
         cout << "gamma: " << gamma << "\n";
         lsv.set_gamma(gamma);
 
@@ -67,6 +67,7 @@ int main() {
         // with the first coeff doubled as in Numerical Recipes
         MatrixXi R = lsv.Lind();
         cout << "Transfer operator matrix computed...\n";
+        //cout << R.topLeftCorner(5,5) << "\n...\n";
         const int RN = R.cols();
         cout << "RN: " << RN << "\n";
 
@@ -86,16 +87,18 @@ int main() {
 
             // inefficiently compute values of integrals on [1/2,1] of the basis Chebyshev polynomials
             for (int i=0; i<RN; i++) {
-                // higher dimension because when taking an integral, the coefficients shift
-                VectorXi co(RN+1);
+                VectorXi co(RN);
                 co(i) = interval_t(1);
 
                 Cheb_i cheb(co, a, b);
                 Cheb_i ii = cheb.integral();
 
                 iota(i) = ii.value(b) - ii.value(a);
+                // undo doubling the first coefficient
+                if (i == 0)
+                    iota(i) *= 2;
             }
-            cout << "Integrals of first basis vectors: \n" << iota.head(5).transpose() << "\n";
+            //cout << "Integrals of first basis vectors: \n" << iota.head(5).transpose() << "\n";
 
             u(0) = 1 / iota(0);
 
@@ -116,12 +119,15 @@ int main() {
             VectorXi hv = interval_root_ns::linear_krawczyk(S, u);
 
             cout << "Error in computation of hv: " << (S * hv - u).norm() << "\n";
-
-            hh = Cheb_i(hv, a, b);
-
             cout << "First coeff of h: \n" << hv.head(5).transpose()
                 << "\n";
             cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
+
+            // h as a function
+            VectorXi hv2 = hv;
+            hv2(0) *= 2; // redo doubling the first coefficient
+            hh = Cheb_i(hv2, a, b);
+
         }
 
     }

@@ -16,7 +16,7 @@
 // arbitrary precision integers (for Bernoulli)
 #include <boost/multiprecision/gmp.hpp>
 
-#include "clenshawcurtis.h"
+//#include "clenshawcurtis.h"
 #include "cheb.h"
 #include "interval-root.h"
 
@@ -108,6 +108,8 @@ class LSV {
         int abel_n_;
         // |\tA(z) - \tA_n(z)| \leq abel_C0_ |t|^{-n}  when  Re(t) \geq abel_r_
         real_t abel_r_, abel_C0_;
+        // \tA(t) is computed with desired accuracy when Re(t) \geq r_good
+        real_t abel_r_good_;
         // |\tA'(t) - a_{-1}| \leq abel_C1_ when Re(t) \leq abel_r1_
         real_t abel_r1_, abel_C1_, abel_am1_minus_C1_;
         // min distance the Nstar preimage of 1 in the t-plane to r1
@@ -118,10 +120,10 @@ class LSV {
 
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
         bool abel_t_in_range(const i_t &t) const {
-            return bmp::lower(t) >= abel_r_;
+            return bmp::lower(t) >= abel_r_good_;
         }
         bool abel_t_in_range(const complex_interval_t &t) const {
-            return bmp::lower(t.real()) >= abel_r_;
+            return bmp::lower(t.real()) >= abel_r_good_;
         }
         template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
         i_t abel_t_error(const i_t &t) const {
@@ -138,14 +140,6 @@ class LSV {
             const int n = abel_n_;
             ir_t factor = abel_C0_ * pow(abs(t), -n),
                  window (-bmp::upper(factor), bmp::upper(factor));
-
-            //DEBUG
-            {
-                if (factor > 1) {
-                    std::cout << "PIZDA!! t: " << t << ", factor: " << factor << "\n";
-                    std::cout << "n: " << n << ", abel_C0_: " << abel_C0_ << "\n";
-                }
-            }
 
             if constexpr (type_one_of<i_t, complex_interval_t>) {
                 return complex_interval_t(window, window);
@@ -217,14 +211,15 @@ class LSV {
             mlogeps_ = log(interval_t(2)) * PREC_;
             N_ = int(ceil(mlogeps_ / Rad));
 
-            std::cout << "Computing Abel function coeffs and constants...\n";
             abel_n_ = int(ceil(mlogeps_)) - 1;
+            std::cout << "abel_n_: " << abel_n_ << "\n";
+            std::cout << "Computing Abel function coeffs and constants...\n";
             compute_abel_stuff();
-            std::cout << "   ... done...\n"
-                << "abel_n_: " << abel_n_ << ", "
+            std::cout
                 << "Nstar_: " << Nstar_ << "\n"
                 << "abel_r_: " << abel_r_ << ", "
-                << "abel_C0_: " << abel_C0_ << "\n"
+                << "abel_C0_: " << abel_C0_ << ", "
+                << "abel_r_good_: " << abel_r_good_ << "\n"
                 << "abel_r1_: " << abel_r1_ << ", "
                 << "abel_C1_: " << abel_C1_ << "\n"
                 << "abel_delta1_: " << abel_delta1_ << ", "
@@ -408,11 +403,6 @@ class LSV {
                         assert(EN(i) > 0);
                         real_t ei = bmp::upper(EN(i));
                         r(i) += interval_t(-ei, ei);
-
-                        if (bmp::width(EN(i)) > 0.001 || ei > 0.001)
-                            std::cout << "TOLL: " << i
-                                << " :: " << bmp::width(EN(i))
-                                << " :: " << ei << "\n";
                     }
                 }
 
@@ -592,7 +582,7 @@ void LSV<PREC>::compute_abel_stuff() {
     abel_coef_.resize(abel_n_ + 3);
     abel_coef_ni_.resize(abel_n_ + 3);
 
-    rx_t r, C0, r1, C1, delta1, varkappa1;
+    rx_t r, C0, r_good, r1, C1, delta1, varkappa1;
 
     // We do the computation in extra precision first, then dumb it down
     VectorXix x_coef(abel_n_ + 3);
@@ -625,7 +615,7 @@ void LSV<PREC>::compute_abel_stuff() {
         }
     }
 
-    { // compute r, C0
+    {   // compute r, C0
         const int n = abel_n_;
 
         ix_t q = ix_t(1) / 2,
@@ -658,14 +648,24 @@ void LSV<PREC>::compute_abel_stuff() {
         C0 = bmp::upper(pow(ix_t(2), n + 1) * M * I / (gamma_ * b));
     }
 
+    {   // compute a "good" value of r, for which
+        // C0 / r^n is smaller than desired precision
+        const int n = abel_n_;
+        ix_t accuracy = pow(ix_t(2), - PREC_);
+        r_good = bmp::upper(pow(C0 / accuracy, ix_t(1) / ix_t(n)));
+
+        if (r_good < r)
+            r_good = r;
+    }
+
     {   // now r1, C1 ...
         assert(x_coef(0) > 0); // sanity check
         const int n = abel_n_;
 
         // increase r1 until C1 is significantly smaller than a_{-1}
         ix_t max_C1 = bmp::lower(ix_t(x_coef(0) / 16));
-        for (r1 = r + 1; ; r1 += 1) {
-            ix_t iC1 = abs(x_coef(1)) / r1 + C0 * pow(r, -n) / (r1 - r);
+        for (r1 = r_good + 1; ; r1 += 1) {
+            ix_t iC1 = abs(x_coef(1)) / r1 + C0 / pow(r1 - 1, n);
             for (int k = 1; k <= n; k++)
                 iC1 += k * abs(x_coef(2 + k)) / pow(r1, k + 1);
 
@@ -695,11 +695,11 @@ void LSV<PREC>::compute_abel_stuff() {
             // unremarkable, but we set the number of derivatives L here
             L_ = 1 + Nstar_ / 2;
 
-            // +20 is arbitrary: we need \nu suffuciently large
-            rx_t min_At = 20 + bmp::upper(
-                    Ar1 + ix_t(L_) / (e_x_ * pi_x_ * varkappa1)
-                    );
-            if (abel_t_in_range(t)  &&  bmp::upper(abel_t_error(t)) < pow(real_t(2), -PREC_)) {
+            if (bmp::lower(t) > r_good) {
+                // +20 is arbitrary: we need \nu suffuciently large
+                rx_t min_At = 20 + bmp::upper(
+                        Ar1 + ix_t(L_) / (e_x_ * pi_x_ * varkappa1)
+                        );
                 rx_t At = bmp::lower(abel_t(t, x_coef)(0));
                 if (At > min_At) {
                     t_Nstar = t;
@@ -739,6 +739,7 @@ void LSV<PREC>::compute_abel_stuff() {
     };
     abel_r_  = round_up(r);
     abel_C0_ = round_up(C0);
+    abel_r_good_ = round_up(r_good);
     abel_r1_ = round_up(r1);
     abel_C1_ = round_up(C1);
     abel_delta1_ = round_up(delta1);
@@ -746,7 +747,9 @@ void LSV<PREC>::compute_abel_stuff() {
 
     assert( abel_r_ > 0 );
     assert( abel_C0_ > 0 );
-    assert( abel_r1_ > abel_r_ );
+    assert( abel_r_good_ > 0 );
+    assert( abel_r_good_ >= abel_r_ );
+    assert( abel_r1_ > abel_r_good_ );
     assert( abel_C1_ > 0 );
     assert( abel_delta1_ > 0 );
     assert( abel_varkappa1_ > 0 );
