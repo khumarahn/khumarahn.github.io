@@ -199,8 +199,7 @@ class LSV {
         }
 
         LSV(const interval_t &gamma = 1) {
-            // DEBUG debug commented temporary temporarily FIXME:
-            //set_gamma(gamma);
+            set_gamma(gamma);
         }
         void set_gamma(const interval_t &gamma) {
             gamma_ = gamma;
@@ -212,8 +211,8 @@ class LSV {
             N_ = int(ceil(mlogeps_ / Rad));
 
             abel_n_ = int(ceil(mlogeps_)) - 1;
-            std::cout << "abel_n_: " << abel_n_ << "\n";
             std::cout << "Computing Abel function coeffs and constants...\n";
+            std::cout << "abel_n_: " << abel_n_ << "\n";
             compute_abel_stuff();
             std::cout
                 << "Nstar_: " << Nstar_ << "\n"
@@ -319,32 +318,76 @@ class LSV {
 
         // transfer operator of induced map, the clever one
         // This returns an approximation of the induced transfer operator by an
-        // N_ by N_ matrix acting on the Chebyshev coefficients
+        // N_ by N_ matrix acting on the Chebyshev coefficients.
+        // We undo doubling of the first coefficient in cheb.h,
+        // so the basis is the most usual T_n(4x-3).
         MatrixXi Lind() const {
-            interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
-
+            const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
             const VectorXi x_nodes = cheb.nodes();
-            assert(x_nodes.size() == N_);
 
             // values of first N Chebyshev polynomials at a preimage on [1/2,1]
-            auto v = [this, &cheb, N = N_]<typename var_t>(const var_t &x) {
+            auto v = [this, &cheb]<typename var_t>(const var_t &x) {
                 var_t y = this->right_inv(x)(0);
-                VectorX<var_t> r = cheb.basis_values_trig(y, N);
+                // slow trigonometric evaluation is more precise
+                // in interval arithmetic
+                VectorX<var_t> r = cheb.basis_values_trig(y, N_);
                 r(0) *= 2; // undo halving T_1(x)
                 return r;
             };
 
+            // constant part of the error in S_small, except for multiplication
+            // by A'(x). Which could also be made constant, but we need to
+            // prove that A' is monotone
+            const VectorXi S_small_error = [this] () {
+                const interval_t &nu = abel_nu_;
+                const real_t &vk = abel_varkappa1_;
+
+                interval_t Lfac = 1;
+                for (int ell = 1; ell <= 2 * L_ + 1; ell++)
+                    Lfac *= ell;
+
+                interval_t E;
+
+                E = Lfac * nu / (L_ * pow(2 * pi_ * nu * vk, 2 * L_ + 1));
+
+                E += pi_ * pi_ * e_ * nu * vk /
+                    ( 6 *
+                      (pow((2 * pi_ * e_ * nu * vk) / (2 * L_ - 1), 2) - 1) *
+                      (exp(interval_t(M_)) - 1)
+                    );
+
+                E /= (gamma_ * abel_am1_minus_C1_ * pow(abel_r1_, 1 + 1 / gamma_));
+
+                // maxima of Chebyshev polynomials in the petal Re(t) > r1
+                VectorXi cheb_max_r1(N_);
+                {
+                    interval_t rr = 2 * pow(abel_r1_, - 1 / gamma_),
+                               tt = 1 + rr + sqrt(rr * rr + 2 * rr);
+                    for (int i = 0; i < N_; i++)
+                        cheb_max_r1(i) = (pow(tt, i) + pow(tt, -i)) / 2;
+                }
+
+                VectorXi EE = E * cheb_max_r1;
+
+                for (int i = 0; i < N_; i++) {
+                    assert(EE(i) > 0);
+                    real_t ei = bmp::upper(EE(i));
+                    EE(i) = interval_t(-ei, ei);
+                }
+                return EE;
+            }();
+
+
             // for a **small** real x, return a rigorous approximation of S(z) = S(x^\gamma)
             // for the vector-valued observable of first N Chebyshev polynomials
-            auto S_small = [this, &cheb, &v, N = N_](const interval_t &x) -> VectorXi {
-                // FIXME: what happens to the first Chebyshev polynomial, which is either halved or doubled?
-                interval_t z = pow(x, gamma_);
-                VectorXi r = VectorXi::Zero(N);
+            auto S_small = [this, &cheb, &v, &S_small_error](const interval_t &x) -> VectorXi {
+                //interval_t z = pow(x, gamma_);
+                VectorXi r = VectorXi::Zero(N_);
                 VectorXi Ax = this->abel(x);
 
-                { // integral
+                {   // integral
                     interval_t y = this->right_inv(x)(0);
-                    VectorXi bi = cheb.beta_integral(0, y, N);
+                    VectorXi bi = cheb.beta_integral(0, y, N_);
                     bi(0) *= 2; // undo halving T_1(x)
                     r += - 2 * Ax(1) * bi;
                 }
@@ -352,66 +395,29 @@ class LSV {
                 // \varphi(z) / 2
                 r += v(x) / real_t(2);
 
-                { // derivatives
+                {   // derivatives
                     const VectorXci &s = derivatives_s_;
                     const VectorXci &c = derivatives_c_;
 
-                    VectorXi der = VectorXi::Zero(N);
+                    VectorXi der = VectorXi::Zero(N_);
                     for (int m = 1; m <= halfM_; m++) {
-                        complex_interval_t xm = abel_inv(Ax(0) + s(m-1))(0);
-                        der += ( c(m-1) * v(xm) / abel(xm)(1) ).real();
+                        Vector2ci xm_inv = abel_inv(Ax(0) + s(m-1));
+                        der += ( c(m-1) * v(xm_inv(0)) * xm_inv(1) ).real();
                     }
 
                     der *= - 2 * Ax(1) / M_;
                     r += der;
                 }
 
-                { // error term
-                  // FIXME: Make this independent of x
-                    interval_t nu = Ax(0) - abel_t(abel_r1_)(0);
-                    assert(nu > 0);
-
-                    interval_t Lfac = 1;
-                    for (int ell = 1; ell <= 2 * L_ + 1; ell++)
-                        Lfac *= ell;
-
-                    interval_t E = 0;
-                    const real_t &vk = abel_varkappa1_;
-
-                    E += Lfac * nu / (L_ * pow(2 * pi_ * nu * vk, 2 * L_ + 1));
-
-                    E += pi_ * pi_ * e_ * nu * vk /
-                        ( 6 *
-                          (pow((2 * pi_ * e_ * nu * vk) / (2 * L_ - 1), 2) - 1) *
-                          (exp(interval_t(M_)) - 1)
-                        );
-
-                    E *= abs(Ax(1)) / (gamma_ * abel_am1_minus_C1_ * pow(abel_r1_, 1 + 1 / gamma_));
-
-                    // maxima of Chebyshev polynomials in the petal
-                    VectorXi TM(N);
-                    {
-                        interval_t rr = 2 * pow(abel_r1_, - 1 / gamma_),
-                                   tt = 1 + rr + sqrt(rr * rr + 2 * rr);
-                        for (int i = 0; i < N; i++)
-                            TM(i) = (pow(tt, i) + pow(tt, -i)) / 2;
-                    }
-
-                    VectorXi EN = E * TM;
-
-                    for (int i = 0; i < N; i++) {
-                        assert(EN(i) > 0);
-                        real_t ei = bmp::upper(EN(i));
-                        r(i) += interval_t(-ei, ei);
-                    }
-                }
+                // error
+                r += abs(Ax(1)) * S_small_error;
 
                 return r;
-            }; // S_small
+            };
 
             // now compute S when x is not necessarily small
-            auto S = [this, &S_small, &v, N = N_](const interval_t &x) -> VectorXi {
-                VectorXi r = VectorXi::Zero(N);
+            auto S = [this, &S_small, &v](const interval_t &x) -> VectorXi const {
+                VectorXi r = VectorXi::Zero(N_);
 
                 interval_t xk = x,
                            Jk = 1;
@@ -429,8 +435,7 @@ class LSV {
                 return r;
             };
 
-            // Compute L v for first N Chebyshev polynomials at
-            // the node points
+            // Compute (L T_n)(x) for n=0,...,N-1 and x in the node points
             MatrixXi L_values(N_, N_);
 #pragma omp parallel for schedule(dynamic)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
@@ -587,7 +592,7 @@ void LSV<PREC>::compute_abel_stuff() {
     // We do the computation in extra precision first, then dumb it down
     VectorXix x_coef(abel_n_ + 3);
 
-    { // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
+    {   // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
         VectorXix b = VectorXix::Zero(abel_n_ + 2);
         b(0) = -1;
 
@@ -681,10 +686,10 @@ void LSV<PREC>::compute_abel_stuff() {
     }
 
     ix_t t_Nstar;
-    { // set Nstar and L
-      // instead of
-      //    Nstar_ = int(ceil(nu + mlogeps_));
-      // we slowly increase Nstar until the constraints are satisfied.
+    {   // set Nstar and L
+        // instead of
+        //    Nstar_ = int(ceil(nu + mlogeps_));
+        // we slowly increase Nstar until the constraints are satisfied.
         ix_t Ar1 = abel_t(ix_t(r1), x_coef)(0);
         ix_t x = 1, t = 1;
 
@@ -709,8 +714,8 @@ void LSV<PREC>::compute_abel_stuff() {
         }
     }
 
-    { // Now set the constant term so that A(1) is approximately 0.
-      // Not trying to control the accuracy
+    {   // Now set the constant term so that A(1) is approximately 0.
+        // Not trying to control the accuracy
         ix_t x = 1;
         for (int i=0; i<Nstar_; i++) {
             x = left_inv(x)(0);
