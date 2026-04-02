@@ -53,8 +53,6 @@ class LSV {
             using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
         template <typename var_t>
             using MatrixX = Eigen::Matrix<var_t,Eigen::Dynamic,Eigen::Dynamic>;
-        template <typename var_t>
-            using func_t = std::function<var_t (var_t)>;
 
         using VectorXr  = VectorX<real_t>;
         using Vector2r  = Vector2<real_t>;
@@ -64,8 +62,6 @@ class LSV {
         using MatrixXr  = MatrixX<real_t>;
         using MatrixXi  = MatrixX<interval_t>;
 
-        using interval_func_t = func_t<interval_t>;
-
         using complex_t = std::complex<real_t>;
         using complex_interval_t = std::complex<interval_t>;
 
@@ -74,8 +70,6 @@ class LSV {
         using VectorXci = VectorX<complex_interval_t>;
 
         using MatrixXci = MatrixX<complex_interval_t>;
-
-        using complex_func_t = func_t<complex_interval_t>;
 
         using interval_cheb_t = Cheb<interval_t>;
 
@@ -249,34 +243,6 @@ class LSV {
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> right_inv(const var_t &x) const {
             return Vector2<var_t>((x + var_t(1)) / var_t(2), 0.5);
-        }
-
-        // transfer operator wrt dx
-        interval_t L(const interval_func_t &v, const interval_t &x) const {
-            Vector2i y1 = left_inv(x),
-                     y2 = right_inv(x);
-            return v(y1(0)) * y1(1) + v(y2(0)) * y2(1);
-        }
-        // transfer operator wrt x^{-gamma} dx
-        interval_t Lxgamma (const interval_func_t &v, const interval_t &x) const {
-            Vector2i y1 = left_inv(x),
-                     y2 = right_inv(x);
-            interval_t w1 = y1(1) * (y1(0) <= 0 ? interval_t(1) : pow(x / y1(0), gamma_)),
-                   w2 = y2(1) * (y2(0) <= 0 ? interval_t(1) : pow(x / y2(0), gamma_));
-            return v(y1(0)) * w1 + v(y2(0)) * w2;
-        }
-
-        // transfer operator of induced map with n branches
-        interval_t Lind(const interval_func_t &v, const interval_t &x, int n) const {
-            interval_t r = 0, z = x, w = 1;
-            for (int k = 0; k < n; k++) {
-                Vector2i yr = right_inv(z);
-                r += v(yr(0)) * w * yr(1);
-                Vector2i l = left_inv(z);
-                z = l(0);
-                w *= l(1);
-            }
-            return r;
         }
 
         // transfer operator of induced map, the clever one
@@ -723,6 +689,13 @@ void LSV<PREC>::compute_abel_stuff() {
     for (int k = 0; k <= abel_n_ + 2; k++)
         abel_coef_ni_(k) = bmp::median(abel_coef_(k));
 
+    abel_am1_minus_C1_ = bmp::lower(i_t(
+                abel_coef_(0) - abel_C1_
+                ));
+    abel_nu_ = bmp::lower(i_t(
+                abel_t(t_Nstar)(0) - abel_t(i_t(abel_r1_))(0)
+                ));
+
     // sanity checks
     assert( abel_r_ > 0 );
     assert( abel_C0_ > 0 );
@@ -732,14 +705,6 @@ void LSV<PREC>::compute_abel_stuff() {
     assert( abel_C1_ > 0 );
     assert( abel_delta1_ > 0 );
     assert( abel_varkappa1_ > 0 );
-
-    abel_am1_minus_C1_ = bmp::lower(i_t(
-                abel_coef_(0) - abel_C1_
-                ));
-    abel_nu_ = bmp::lower(i_t(
-                abel_t(t_Nstar)(0) - abel_t(i_t(abel_r1_))(0)
-                ));
-
     assert( abel_am1_minus_C1_ > 0 );
     assert( abel_nu_ > 0 );
 
