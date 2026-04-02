@@ -16,7 +16,6 @@ namespace bmp = boost::multiprecision;
 
 int main() {
     using LSV = lsv_ns::LSV<PREC>;
-    LSV lsv;
 
     // real and interval types
     using real_t = LSV::real_t;
@@ -46,7 +45,7 @@ int main() {
 
     for (real_t gamma = real_t(4) / 3; gamma <= 5; gamma += 50) {
         cout << "gamma: " << gamma << "\n";
-        lsv.set_gamma(gamma);
+        LSV lsv(gamma);
 
         // Look at the coefficients of the Abel function
         {
