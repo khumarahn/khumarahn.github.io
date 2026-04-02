@@ -48,11 +48,8 @@ class LSV {
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
         // extra precision
-        using real_extra_t     = bmp::number<bmp::mpfr_float_backend<2 * DIGITS>>;
-        using interval_extra_t = bmp::number<bmp::mpfi_float_backend<2 * DIGITS>>;
-
-        using complex_t = std::complex<real_t>;
-        using complex_interval_t = std::complex<interval_t>;
+        using real_extra_t     = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
+        using interval_extra_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
         template <typename var_t>
             using Vector2 = Eigen::Matrix<var_t,2,1>;
@@ -63,27 +60,31 @@ class LSV {
         template <typename var_t>
             using func_t = std::function<var_t (var_t)>;
 
-        typedef VectorX<real_t> VectorXr;
-        typedef Vector2<real_t> Vector2r;
-        typedef Vector2<interval_t> Vector2i;
-        typedef VectorX<interval_t> VectorXi;
-        typedef VectorX<interval_extra_t> VectorXix;
+        using VectorXr  = VectorX<real_t>;
+        using Vector2r  = Vector2<real_t>;
+        using Vector2i  = Vector2<interval_t>;
+        using VectorXi  = VectorX<interval_t>;
+        using VectorXix = VectorX<interval_extra_t>;
 
-        typedef MatrixX<real_t> MatrixXr;
-        typedef MatrixX<interval_t> MatrixXi;
-        typedef MatrixX<interval_extra_t> MatrixXix;
+        using MatrixXr  = MatrixX<real_t>;
+        using MatrixXi  = MatrixX<interval_t>;
+        using MatrixXix = MatrixX<interval_extra_t>;
 
-        typedef func_t<interval_t> interval_func_t;
+        using interval_func_t = func_t<interval_t>;
 
-        typedef Vector2<complex_t> Vector2c;
-        typedef Vector2<complex_interval_t> Vector2ci;
-        typedef VectorX<complex_interval_t> VectorXci;
+        using complex_t = std::complex<real_t>;
+        using complex_interval_t = std::complex<interval_t>;
 
-        typedef MatrixX<complex_interval_t> MatrixXci;
+        using Vector2c  = Vector2<complex_t>;
+        using Vector2ci = Vector2<complex_interval_t>;
+        using VectorXci = VectorX<complex_interval_t>;
 
-        typedef func_t<complex_interval_t> complex_func_t;
+        using MatrixXci = MatrixX<complex_interval_t>;
 
-        typedef Cheb<interval_t> interval_cheb_t;
+        using complex_func_t = func_t<complex_interval_t>;
+
+        using interval_cheb_t = Cheb<interval_t>;
+
     private:
         static const interval_t e_;
         static const interval_extra_t e_x_;
@@ -96,57 +97,29 @@ class LSV {
         VectorXi abel_coef_;
         VectorXr  abel_coef_ni_;
 
-        void compute_abel_stuff();
         MatrixXix abel_matrix() const;
+        void compute_abel_stuff();
 
         static constexpr int PREC_ = PREC;
         interval_t mlogeps_;
         int N_, Nstar_, L_, halfM_, M_, Mhat_;
 
-        // Constants from the Abel function, with \tA = \tilde{A} and \hA = \hat{A},
+        // Constants for the Abel function, with \tA = \tilde{A} and \hA = \hat{A},
         // \tA_n(t) = a_{-1} + a_\ell + a_0 + a_1 t + ... + a_n t^n
+        // * n:
         int abel_n_;
-        // |\tA(z) - \tA_n(z)| \leq abel_C0_ |t|^{-n}  when  Re(t) \geq abel_r_
+        // * |\tA(z) - \tA_n(z)| \leq C0 |t|^{-n}  when  Re(t) \geq r
         real_t abel_r_, abel_C0_;
-        // \tA(t) is computed with desired accuracy when Re(t) \geq r_good
+        // * \tA(t) is computed with desired accuracy when Re(t) \geq r_good
         real_t abel_r_good_;
-        // |\tA'(t) - a_{-1}| \leq abel_C1_ when Re(t) \leq abel_r1_
+        // * |\tA'(t) - a_{-1}| \leq C1 when Re(t) \geq r1,
+        //   with C1 significantly smaller than a_{-1}
         real_t abel_r1_, abel_C1_, abel_am1_minus_C1_;
-        // min distance the Nstar preimage of 1 in the t-plane to r1
+        // * min distance from the Nstar-th preimage of 1 in the t-plane to r1
         real_t abel_nu_;
-        // derived variables
+        // * misc
         real_t abel_delta1_,        // = C1 / sqrt(a_{-1}^2 - C1^2)
                abel_varkappa1_;     // = (1 + delta1^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
-
-        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t>
-        bool abel_t_in_range(const i_t &t) const {
-            return bmp::lower(t) >= abel_r_good_;
-        }
-        bool abel_t_in_range(const complex_interval_t &t) const {
-            return bmp::lower(t.real()) >= abel_r_good_;
-        }
-        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
-        i_t abel_t_error(const i_t &t) const {
-
-            // ir_t is the underlying real interval type
-            using ir_t = std::conditional<type_one_of<i_t,complex_interval_t>,
-                  interval_t,
-                  i_t>::type;
-
-            if (!abel_t_in_range(t)) {
-                assert(false);
-            }
-
-            const int n = abel_n_;
-            ir_t factor = abel_C0_ * pow(abs(t), -n),
-                 window (-bmp::upper(factor), bmp::upper(factor));
-
-            if constexpr (type_one_of<i_t, complex_interval_t>) {
-                return complex_interval_t(window, window);
-            } else {
-                return window;
-            }
-        }
 
         VectorXci derivatives_s_,
                   derivatives_c_;
@@ -326,12 +299,12 @@ class LSV {
             const VectorXi x_nodes = cheb.nodes();
 
             // values of first N Chebyshev polynomials at a preimage on [1/2,1]
-            auto v = [this, &cheb]<typename var_t>(const var_t &x) {
+            auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
                 var_t y = this->right_inv(x)(0);
                 // slow trigonometric evaluation is more precise
                 // in interval arithmetic
                 VectorX<var_t> r = cheb.basis_values_trig(y, N_);
-                r(0) *= 2; // undo halving T_1(x)
+                r(0) *= 2; // undo halving T_0(x)
                 return r;
             };
 
@@ -380,10 +353,10 @@ class LSV {
 
             // for a **small** real x, return a rigorous approximation of S(z) = S(x^\gamma)
             // for the vector-valued observable of first N Chebyshev polynomials
-            auto S_small = [this, &cheb, &v, &S_small_error](const interval_t &x) -> VectorXi {
+            auto S_small = [this, &cheb, &phi, &S_small_error](const interval_t &x) -> VectorXi {
                 //interval_t z = pow(x, gamma_);
                 VectorXi r = VectorXi::Zero(N_);
-                VectorXi Ax = this->abel(x);
+                Vector2i Ax = this->abel(x);
 
                 {   // integral
                     interval_t y = this->right_inv(x)(0);
@@ -393,7 +366,7 @@ class LSV {
                 }
 
                 // \varphi(z) / 2
-                r += v(x) / real_t(2);
+                r += phi(x) / real_t(2);
 
                 {   // derivatives
                     const VectorXci &s = derivatives_s_;
@@ -402,7 +375,7 @@ class LSV {
                     VectorXi der = VectorXi::Zero(N_);
                     for (int m = 1; m <= halfM_; m++) {
                         Vector2ci xm_inv = abel_inv(Ax(0) + s(m-1));
-                        der += ( c(m-1) * v(xm_inv(0)) * xm_inv(1) ).real();
+                        der += ( c(m-1) * phi(xm_inv(0)) * xm_inv(1) ).real();
                     }
 
                     der *= - 2 * Ax(1) / M_;
@@ -416,22 +389,22 @@ class LSV {
             };
 
             // now compute S when x is not necessarily small
-            auto S = [this, &S_small, &v](const interval_t &x) -> VectorXi const {
+            auto S = [this, &S_small, &phi](const interval_t &x) -> VectorXi const {
                 VectorXi r = VectorXi::Zero(N_);
 
                 interval_t xk = x,
-                           Jk = 1;
+                           inv_Jk = 1;
 
                 // add branches naively up to Nstar
                 for (int k = 0; k < Nstar_; k++) {
-                    r += v(xk) * Jk;
+                    r += phi(xk) * inv_Jk;
                     Vector2i y = left_inv(xk);
                     xk = y(0);
-                    Jk *= y(1);
+                    inv_Jk *= y(1);
                 }
 
                 // add the rest when xk is small
-                r += S_small(xk) * Jk;
+                r += S_small(xk) * inv_Jk;
                 return r;
             };
 
@@ -440,7 +413,7 @@ class LSV {
 #pragma omp parallel for schedule(dynamic)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes[ix];
-                L_values.col(ix) = S(x) / real_t(2);
+                L_values.col(ix) = S(x) / interval_t(2);
             }
 
             // Approximate the result with Chebyshev polynomials
@@ -469,34 +442,39 @@ class LSV {
             Vector2<var_t> A = abel_t(t);
             return Vector2<var_t>(A(0), -gamma * (t / x) * A(1));
         }
+        // sum for the abel_t, with a provided array of coefficients, without the error term
         template <typename var_t, typename coef_t> requires
             (type_one_of<var_t, real_t, complex_t> && type_one_of<coef_t, VectorXr>) ||
             (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>) ||
             (type_one_of<var_t, interval_extra_t> && type_one_of<coef_t, VectorXix>)
-        Vector2<var_t> abel_t(const var_t &t, const coef_t &coef) const {
+        Vector2<var_t> abel_t_sum(const var_t &t, const coef_t &coef) const {
             assert(coef.size() == abel_n_ + 3);
             var_t A = coef(0) * t + coef(1) * log(t) + coef(2),
                   dA = coef(0) + coef(1) / t;
 
             const var_t ti = var_t(1) / t;
-            var_t tj = ti;
-            for (int j = 1; j <= abel_n_; j++) {
-                A += coef(2 + j) * tj;
-                tj *= ti;
-                dA -= var_t(j) * coef(2 + j) * tj;
+
+            var_t A_tail(0), dA_tail(0);
+
+            // Horner's method
+            for (int j = abel_n_; j >= 1; j--) {
+                A_tail = coef(2 + j) + ti * A_tail;
+                dA_tail = var_t(j) * coef(2 + j) + ti * dA_tail;
             }
-            if constexpr (type_one_of<var_t, interval_t, interval_extra_t, complex_interval_t>) {
-                A += abel_t_error(t);
-            }
+            A += ti * A_tail;
+            dA -= ti * ti * dA_tail;
+
             return Vector2<var_t>(A, dA);
         }
+        // non-interval version
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         Vector2<var_t> abel_t(const var_t &t) const {
-            return abel_t(t, abel_coef_ni_);
+            return abel_t_sum(t, abel_coef_ni_);
         }
+        // interval version
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel_t(const var_t &t) const {
-            return abel_t(t, abel_coef_);
+            return abel_t_sum(t, abel_coef_) + abel_t_error(t);
         }
 
         // inverse
@@ -519,6 +497,7 @@ class LSV {
         Vector2i abel_t_inv(const interval_t &a) const {
             Vector2r g = abel_t_inv<real_t>(bmp::median(a));
             // an interval enclosing the root
+            // FIXME: look at the constants 16 and 0.0001
             interval_t guess = g(0) + 16 * g(1) * (bmp::width(a) + 0.0001) * interval_t(-1, 1);
 
             auto f = [this, &a] (const interval_t &t) {
@@ -537,6 +516,7 @@ class LSV {
             Vector2c g = abel_t_inv<complex_t>(m(a));
             complex_interval_t g0 = g(0),
                                g1 = g(1);
+            // FIXME: look at the constants 16 and 0.0001
             complex_interval_t guess = g0 + interval_t(16) * g1 * (
                     bmp::width(a.real()) + bmp::width(a.imag()) + interval_t(0.001)) *
                 complex_interval_t(interval_t(-1,1), interval_t(-1,1));
@@ -554,6 +534,40 @@ class LSV {
             var_t x = pow(t, var_t(-1 / gamma_));
             return Vector2<var_t>(x, -(x / t) / gamma_ * dAt);
         }
+
+        // error term for abel_t
+        template <typename i_t> requires type_one_of<i_t, interval_t, interval_extra_t, complex_interval_t>
+        Vector2<i_t> abel_t_error(const i_t &t) const {
+
+            // check is we are in the right region where we can compute the
+            // Abel function accurately
+            if constexpr (type_one_of<i_t, complex_interval_t>)
+                assert( bmp::lower(t.real()) >= abel_r_good_ );
+            else
+                assert( bmp::lower(t) >= abel_r_good_ );
+
+            // ir_t is the underlying real interval type
+            using ir_t = std::conditional<
+                type_one_of<i_t,complex_interval_t>,  interval_t,  i_t
+                >::type;
+
+            ir_t factor0 = abel_C0_ * pow(abs(t), -abel_n_),
+                 window0 (-bmp::upper(factor0), bmp::upper(factor0)),
+                 factor1 = abel_C0_ * pow(abs(t - i_t(1)), -abel_n_),
+                 window1 (-bmp::upper(factor1), bmp::upper(factor1));
+
+            Vector2<i_t> r;
+            if constexpr (type_one_of<i_t, complex_interval_t>) {
+                r(0) = complex_interval_t(window0, window0);
+                r(1) = complex_interval_t(window1, window1);
+            } else {
+                r(0) = window0;
+                r(0) = window1;
+            }
+
+            return r;
+        }
+
 
         // Akiyama–Tanigawa algorithm for even Bernoulli numbers B_{2 k}, k = 0, 1, ..., p
         static VectorXi bernoulli2k(int p) {
@@ -690,7 +704,7 @@ void LSV<PREC>::compute_abel_stuff() {
         // instead of
         //    Nstar_ = int(ceil(nu + mlogeps_));
         // we slowly increase Nstar until the constraints are satisfied.
-        ix_t Ar1 = abel_t(ix_t(r1), x_coef)(0);
+        ix_t Ar1 = abel_t_sum(ix_t(r1), x_coef)(0);
         ix_t x = 1, t = 1;
 
         for (Nstar_ = 1; ; Nstar_++) {
@@ -705,7 +719,7 @@ void LSV<PREC>::compute_abel_stuff() {
                 rx_t min_At = 20 + bmp::upper(
                         Ar1 + ix_t(L_) / (e_x_ * pi_x_ * varkappa1)
                         );
-                rx_t At = bmp::lower(abel_t(t, x_coef)(0));
+                rx_t At = bmp::lower(abel_t_sum(t, x_coef)(0));
                 if (At > min_At) {
                     t_Nstar = t;
                     break;
@@ -725,7 +739,7 @@ void LSV<PREC>::compute_abel_stuff() {
 
         // now, we should have A(t) = Nstar_
         x_coef(2) = 0;
-        x_coef(2) = Nstar_ - bmp::median(abel_t(t, x_coef)(0));
+        x_coef(2) = Nstar_ - bmp::median(abel_t_sum(t, x_coef)(0));
     }
 
     // populate the coefficients
@@ -763,7 +777,7 @@ void LSV<PREC>::compute_abel_stuff() {
                 x_coef(0) - C1
                 ));
     abel_nu_ = bmp::lower(interval_t(
-                abel_t(t_Nstar, x_coef)(0) - abel_t(ix_t(r1), x_coef)(0)
+                abel_t_sum(t_Nstar, x_coef)(0) - abel_t_sum(ix_t(r1), x_coef)(0)
                 ));
 
     assert( abel_am1_minus_C1_ > 0 );
