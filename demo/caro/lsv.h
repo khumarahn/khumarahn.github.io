@@ -245,7 +245,7 @@ class LSV {
             return Vector2<var_t>((x + var_t(1)) / var_t(2), 0.5);
         }
 
-        // transfer operator of induced map, the clever one
+        // Transfer operator for the induced map, the clever one.
         // This returns an approximation of the induced transfer operator by an
         // N_ by N_ matrix acting on the Chebyshev coefficients.
         // We undo doubling of the first coefficient in cheb.h,
@@ -254,7 +254,7 @@ class LSV {
             const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
             const VectorXi x_nodes = cheb.nodes();
 
-            // values of first N Chebyshev polynomials at a preimage on [1/2,1]
+            // values of first N Chebyshev polynomials at the preimage on [1/2,1]
             auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
                 var_t y = this->right_inv(x)(0);
                 // slow trigonometric evaluation is more precise
@@ -265,8 +265,7 @@ class LSV {
             };
 
             // constant part of the error in S_small, except for multiplication
-            // by A'(x). Which could also be made constant, but we need to
-            // prove that A' is monotone
+            // by |A'(x)|.
             const VectorXi S_small_error = [this] () {
                 const interval_t &nu = abel_nu_;
                 const real_t &vk = abel_varkappa1_;
@@ -317,7 +316,7 @@ class LSV {
                 {   // integral
                     interval_t y = this->right_inv(x)(0);
                     VectorXi bi = cheb.beta_integral(0, y, N_);
-                    bi(0) *= 2; // undo halving T_1(x)
+                    bi(0) *= 2; // undo halving T_0(x)
                     r += - 2 * Ax(1) * bi;
                 }
 
@@ -379,7 +378,7 @@ class LSV {
                 for (int k = 0; k < N_; k++) {
                     c.set_from_values(L_values.row(k).transpose());
                     VectorXi cc = c.coef();
-                    cc(0) /= 2; // undo halving T_1(x)
+                    cc(0) /= 2; // undo halving T_0(x)
                     R.col(k) = cc;
                 }
             }
@@ -387,18 +386,8 @@ class LSV {
             return R;
         }
 
-        // Approximate Abel function A(x), satisfying A(left(x)) = A(x) - 1.
-        // With t = t(x) = x^{-gamma}, and N = KAbel-1, we use an asymptotic approximation
-        //      A(x) ≈ am1 t + al log t + a0 + a1 / t + a2 / t^2 + ... + aN / t^N
-        // which is valid for sufficiently large Re(t) with a controlled error
-        template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
-        Vector2<var_t> abel(const var_t &x) const {
-            const var_t gamma = var_t(gamma_);
-            var_t t = pow(x, -gamma);
-            Vector2<var_t> A = abel_t(t);
-            return Vector2<var_t>(A(0), -gamma * (t / x) * A(1));
-        }
-        // sum for the abel_t, with a provided array of coefficients, without the error term
+        // *** ABEL FUNCTIONS ***
+        // * sum for \tA(t), or abel_t, with a provided array of coefficients, without the error term
         template <typename var_t, typename coef_t> requires
             (type_one_of<var_t, real_t, complex_t> && type_one_of<coef_t, VectorXr>) ||
             (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>)
@@ -421,19 +410,27 @@ class LSV {
 
             return Vector2<var_t>(A, dA);
         }
-        // non-interval version
+        // * non-interval version
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         Vector2<var_t> abel_t(const var_t &t) const {
             return abel_t_sum(t, abel_coef_ni_);
         }
-        // interval version
+        // * interval version
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel_t(const var_t &t) const {
             return abel_t_sum(t, abel_coef_) + abel_t_error(t);
         }
+        // * interval A(x)
+        template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
+        Vector2<var_t> abel(const var_t &x) const {
+            const var_t gamma = var_t(gamma_);
+            var_t t = pow(x, -gamma);
+            Vector2<var_t> A = abel_t(t);
+            return Vector2<var_t>(A(0), -gamma * (t / x) * A(1));
+        }
 
         // inverse
-        // * non-interval version, Newton method
+        // * non-interval version in t, Newton method
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         Vector2<var_t> abel_t_inv(const var_t &a) const {
             var_t t = a / abel_coef_ni_(0);
@@ -448,7 +445,7 @@ class LSV {
             }
             return Vector2<var_t>(t, var_t(1) / A(1));
         }
-        // * real interval version
+        // * real interval version in t
         Vector2i abel_t_inv(const interval_t &a) const {
             Vector2r g = abel_t_inv<real_t>(bmp::median(a));
             // an interval enclosing the root
@@ -462,7 +459,7 @@ class LSV {
             };
             return interval_root_ns::interval_newton(f, guess);
         }
-        // * complex interval version
+        // * complex interval version in t
         Vector2ci abel_t_inv(const complex_interval_t &a) const {
             auto m = [] (complex_interval_t x) {
                 using bmp::median;
@@ -482,6 +479,7 @@ class LSV {
             };
             return interval_root_ns::complex_krawczyk(f, guess);
         }
+        // * interval version in x
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel_inv(const var_t &a) const {
             Vector2<var_t> Ai = abel_t_inv(a);
@@ -517,7 +515,7 @@ class LSV {
                 r(1) = complex_interval_t(window1, window1);
             } else {
                 r(0) = window0;
-                r(0) = window1;
+                r(1) = window1;
             }
 
             return r;
