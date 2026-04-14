@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 128;   // in bits
+const int PREC = 48;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -25,7 +25,7 @@ int main() {
     // Matrix and vector types in interval arithmetic
     using MatrixXi = LSV::MatrixXi;
     //using MatrixXix = LSV::MatrixXix;
-    using MatrixXr = LSV::MatrixXr;
+    //using MatrixXr = LSV::MatrixXr;
     using VectorXi = LSV::VectorXi;
     //using Vector2ci = LSV::Vector2ci;
 
@@ -75,60 +75,15 @@ int main() {
 
         interval_t a = 0.5, b = 1.0;
 
-        Cheb_i hh;
-        // computation of invariant density without eigen decomposition
-        {
-            // On the vector space W of first RN Chebyshev polynomials,
-            // we compute iota : W \to R, w \mapsto \int_{0.5}^1 w
-            // and u \in W so that iota(u) = 1
-            VectorXi iota(RN);
-            VectorXi u(RN);
+        // invariant density h
+        Cheb_i h = lsv.h();
 
-            // inefficiently compute values of integrals on [1/2,1] of the basis Chebyshev polynomials
-            for (int i=0; i<RN; i++) {
-                VectorXi co(RN);
-                co(i) = interval_t(1);
+        VectorXi hv = h.coef();
 
-                Cheb_i cheb(co, a, b);
-                Cheb_i ii = cheb.integral();
-
-                iota(i) = ii.value(b) - ii.value(a);
-                // undo doubling the first coefficient
-                if (i == 0)
-                    iota(i) *= 2;
-            }
-            //cout << "Integrals of first basis vectors: \n" << iota.head(5).transpose() << "\n";
-
-            u(0) = 1 / iota(0);
-
-            // Now the invariant density in Chebyshev basis
-            // is hh = (I - R + u iota)^{-1} u
-            MatrixXi S = MatrixXi::Identity(RN,RN) - R + u * iota.transpose();
-            MatrixXr Ss(RN, RN);
-            for (int i=0; i<RN; i++)
-                for (int j=0; j<RN; j++)
-                    Ss(i,j) = bmp::median(S(i,j));
-            MatrixXr Ssi = Ss.inverse();
-            MatrixXi Si(RN,RN);
-            for (int i=0; i<RN; i++)
-                for (int j=0; j<RN; j++)
-                    Si(i,j) = Ssi(i,j);
-
-            //VectorXi hv = (Si * S).householderQr().solve(Si * u);
-            VectorXi hv = interval_root_ns::linear_krawczyk(S, u);
-
-            cout << "Error in computation of hv: " << (S * hv - u).norm() << "\n";
-            cout << "First coeff of h: \n" << hv.head(5).transpose()
-                << "\n";
-            cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
-
-            // h as a function
-            VectorXi hv2 = hv;
-            hv2(0) *= 2; // redo doubling the first coefficient
-            hh = Cheb_i(hv2, a, b);
-
-        }
-
+        cout << "Error in Lh - h: " << (R * hv - hv).norm() << "\n";
+        cout << "First coeff of h: \n" << hv.head(5).transpose()
+            << "\n";
+        cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
     }
 
     return 0;

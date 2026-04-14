@@ -248,8 +248,6 @@ class LSV {
         // Transfer operator for the induced map, the clever one.
         // This returns an approximation of the induced transfer operator by an
         // N_ by N_ matrix acting on the Chebyshev coefficients.
-        // We undo doubling of the first coefficient in cheb.h,
-        // so the basis is the most usual T_n(4x-3).
         MatrixXi Lind() const {
             const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
             const VectorXi x_nodes = cheb.nodes();
@@ -260,7 +258,6 @@ class LSV {
                 // slow trigonometric evaluation is more precise
                 // in interval arithmetic
                 VectorX<var_t> r = cheb.basis_values_trig(y, N_);
-                r(0) *= 2; // undo halving T_0(x)
                 return r;
             };
 
@@ -316,7 +313,6 @@ class LSV {
                 {   // integral
                     interval_t y = this->right_inv(x)(0);
                     VectorXi bi = cheb.beta_integral(0, y, N_);
-                    bi(0) *= 2; // undo halving T_0(x)
                     r += - 2 * Ax(1) * bi;
                 }
 
@@ -378,12 +374,40 @@ class LSV {
                 for (int k = 0; k < N_; k++) {
                     c.set_from_values(L_values.row(k).transpose());
                     VectorXi cc = c.coef();
-                    cc(0) /= 2; // undo halving T_0(x)
                     R.col(k) = cc;
                 }
             }
 
             return R;
+        }
+
+        interval_cheb_t h() const {
+            interval_t a(interval_t(1) / 2),
+                       b(1);
+
+            MatrixXi L = Lind();
+            int LN = L.cols();
+
+            VectorXi iota(LN);
+            VectorXi u = VectorXi::Zero(LN);
+
+            {   // compute values of integrals on [1/2,1] of the basis Chebyshev polynomials
+                interval_cheb_t ii(a, b, 1);
+                iota = ii.beta_integral(0, b, LN);
+            }
+
+            u(0) = 1 / iota(0);
+
+            // Now the invariant density in Chebyshev basis
+            // is h = (I - L + u iota)^{-1} u
+            MatrixXi S = MatrixXi::Identity(LN,LN) - L + u * iota.transpose();
+
+            VectorXi hv = interval_root_ns::linear_krawczyk(S, u);
+
+            // h as a function
+            interval_cheb_t hh(hv, a, b);
+
+            return hh;
         }
 
         // *** ABEL FUNCTIONS ***
