@@ -73,6 +73,13 @@ class LSV {
 
         using interval_cheb_t = Cheb<interval_t>;
 
+        // error and metadata for the invariant density
+        struct h_meta_t {
+            MatrixXi L;
+            interval_cheb_t h;
+            interval_t err, rho_A;
+        };
+
     private:
         static const interval_t e_;
         static const interval_t pi_;
@@ -167,7 +174,7 @@ class LSV {
             interval_t Rad = interval_t(80) / interval_t(100);
 
             mlogeps_ = log(interval_t(2)) * PREC_;
-            N_ = int(ceil(mlogeps_ / Rad));
+            N_ = int(ceil(mlogeps_ / Rad)) + 42; // FIXME
 
             abel_n_ = int(ceil(mlogeps_)) - 1;
             std::cout << "Computing Abel function coeffs and constants...\n";
@@ -381,33 +388,172 @@ class LSV {
             return R;
         }
 
-        interval_cheb_t h() const {
+        h_meta_t h_meta() const {
+            h_meta_t meta;
+
             interval_t a(interval_t(1) / 2),
                        b(1);
 
             MatrixXi L = Lind();
-            int LN = L.cols();
+            int N = L.cols();
 
-            VectorXi iota(LN);
-            VectorXi u = VectorXi::Zero(LN);
+            meta.L = L;
 
-            {   // compute values of integrals on [1/2,1] of the basis Chebyshev polynomials
-                interval_cheb_t ii(a, b, 1);
-                iota = ii.beta_integral(0, b, LN);
-            }
 
+            // iota is values of integrals on [1/2,1] of the basis Chebyshev polynomials
+            VectorXi iota = interval_cheb_t(a, b, 1).beta_integral(0, b, N);
+
+            VectorXi u = VectorXi::Zero(N);
             u(0) = 1 / iota(0);
 
             // Now the invariant density in Chebyshev basis
             // is h = (I - L + u iota)^{-1} u
-            MatrixXi S = MatrixXi::Identity(LN,LN) - L + u * iota.transpose();
-
+            MatrixXi S = MatrixXi::Identity(N,N) - L + u * iota.transpose();
             VectorXi hv = interval_root_ns::linear_krawczyk(S, u);
 
             // h as a function
-            interval_cheb_t hh(hv, a, b);
+            meta.h = interval_cheb_t(hv, a, b);
 
-            return hh;
+            // *** Now h and L are computed,
+            // *** error and ellipses to go
+
+            // sector
+            interval_t sin_theta_C = min(
+                    interval_t(1),
+                    interval_t(bmp::lower(interval_t(
+                                sin(pi_ / (2 * gamma_))
+
+                                )))
+                    );
+
+            // C
+            interval_t rho_C = sqrt(1 + 8 * pow(sin_theta_C, 2))
+                + sqrt(interval_t(8)) * sin_theta_C;
+
+            // try!
+            rho_C = pow(rho_C, interval_t(7) / 8);
+
+            // B
+            interval_t s_B = 1 + (rho_C + 1 / rho_C) / 2,
+                       rho_B = (s_B + sqrt(s_B * s_B - 4)) / 2;
+
+            // A, Z
+            interval_t rho_A = sqrt( rho_B * rho_C);
+
+            assert(rho_B < rho_A && rho_A < rho_C);
+
+            std::cout << "rho_C: " << rho_C << ", rho_A: " << rho_A << ", ratio: " << rho_C / rho_A << "\n";
+
+            // norm of \cL from B to an ellipse with parameter rho
+            auto norm_L = [this] (interval_t rho) {
+                // semi-axis
+                interval_t a = (rho + 1 / rho) / 8,
+                           b = (rho - 1 / rho) / 8;
+
+                interval_t beta = interval_t(max(bmp::lower(gamma_), real_t(1)), max(bmp::upper(gamma_), real_t(1))),
+                           r = pow(interval_t(3) / 4 - a, beta),
+                           R = pow(interval_t(3) / 2 + 2 * a, beta),
+                           phi = beta * asin(sqrt(interval_t(2)) * b);
+
+                interval_t term_r = pow(r + 1, 4) / pow(r, 2 + 1 / beta),
+                           term_R = pow(R + 1, 4) / pow(R, 2 + 1 / beta);
+
+                interval_t K = max(term_r, term_R) / pow(cos(phi), 3);
+
+                return bmp::upper(K);
+            };
+
+            // norm of an operator given by a matrix
+            // in an ellipse with paramater rho
+            auto norm_Q = [] (MatrixXi Q, interval_t rho) {
+                assert(Q.cols() == Q.rows());
+
+                int n = Q.cols();
+
+                VectorXi D(n), E(n);
+                D(0) = interval_t(1) / 2;
+                E(0) = 2;
+                for (int j = 1; j < n; j++) {
+                    D(j) = (pow(rho, j) + pow(rho, -j)) / 2;
+                    E(j) = pow(rho, -j) * 2;
+                }
+
+                interval_t r = 0;
+                for (int j = 0; j < n; j++) {
+                    for (int k = 0; k < n; k++) {
+                        r += abs(D(j) * Q(j,k) * E(k));
+                    }
+                }
+
+                r = bmp::upper(r);
+                return r;
+            };
+
+            auto n_choose_k = [] (int n, int k) -> interval_t {
+                if (k < 0 || k > n) return 0;
+                if (k > n / 2)
+                    k = n - k;
+
+                interval_t r(1);
+                for (int j = 1; j <= k; j++) {
+                    r *= interval_t(n - j + 1) / interval_t(j);
+                }
+                return r;
+            };
+
+            // norm of I - \bpi between ellipses with
+            // parameters rho_1 and rho_2
+            auto norm_I_pi = [N] (interval_t rho_1, interval_t rho_2) {
+                assert(rho_1 > rho_2);
+                return 8 / (pow(rho_1 / rho_2, N - 1) * log(rho_1 / rho_2));
+            };
+
+            // more norms
+            interval_t norm_I_pi_C_A = norm_I_pi(rho_C, rho_A),
+                       norm_I_pi_A_B = norm_I_pi(rho_A, rho_B),
+                       norm_L_B_A = norm_L(rho_A),
+                       norm_L_B_C = norm_L(rho_C),
+                       norm_L_A_C = norm_L_B_C,
+                       norm_u_iota_I_pi_A = norm_I_pi(rho_A, 1);
+
+            // print all norms above:
+            std::cout << "norm_I_pi_C_A: " << norm_I_pi_C_A << "\n"
+                << "norm_I_pi_A_B: " << norm_I_pi_A_B << "\n"
+                << "norm_L_B_A: " << norm_L_B_A << "\n"
+                << "norm_L_B_C: " << norm_L_B_C << "\n"
+                << "norm_L_A_C: " << norm_L_A_C << "\n"
+                << "norm_u_iota_I_pi_A: " << norm_u_iota_I_pi_A << "\n";
+
+            interval_t eps = norm_I_pi_C_A * norm_L_A_C
+                + norm_I_pi_C_A * norm_L_B_C * norm_I_pi_A_B
+                + norm_L_B_A * norm_I_pi_A_B
+                + norm_u_iota_I_pi_A;
+
+            std::cout << "eps: " << eps << "\n";
+
+            const MatrixXi bDelta = L - u * iota.transpose();
+
+            int n = 0;
+
+            std::vector<interval_t> delta;
+            std::vector<interval_t> norm_bDelta;
+            norm_bDelta.push_back(1);
+
+            for (MatrixXi bDelta_n = bDelta; ; n++) {
+                interval_t d = 0;
+                for (int k = 0; k <= n; k++)
+                    d += n_choose_k(n, k) * norm_bDelta[k] * pow(eps, n - k);
+                delta.push_back(d);
+
+                std::cout << "** n: " << n << ", delta[n]: " << delta[n] << "\n";
+                if (bmp::upper(delta[n]) < 0.5 || n > 32)
+                    break;
+
+                bDelta_n *= bDelta;
+                norm_bDelta.push_back(norm_Q(bDelta_n, rho_A));
+            }
+
+            return meta;
         }
 
         // *** ABEL FUNCTIONS ***

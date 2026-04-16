@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 48;   // in bits
+const int PREC = 96;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -61,26 +61,27 @@ int main() {
             //cout << "Abel coeff: " << abel_coef.transpose() << "\n";
         }
 
+        auto h_meta = lsv.h_meta();
         // Retrieve the transfer operator in interval form,
-        // as an RN x RN matrix acting on Chebyshev polynomials on [0.5,1]
+        // as an N x N matrix acting on Chebyshev polynomials on [0.5,1]
         // with the first coeff doubled as in Numerical Recipes
-        MatrixXi R = lsv.Lind();
+        MatrixXi L = h_meta.L;
         cout << "Transfer operator matrix computed...\n";
-        //cout << R.topLeftCorner(5,5) << "\n...\n";
-        const int RN = R.cols();
-        cout << "RN: " << RN << "\n";
+        //cout << L.topLeftCorner(5,5) << "\n...\n";
+        const int N = L.cols();
+        cout << "N: " << N << "\n";
 
         // Make it a bit uncertain
-        cout << "Transfer operator retrieved, L1 uncertainty: " << uncertainty(R) << " ...\n";
+        cout << "Transfer operator retrieved, L1 uncertainty: " << uncertainty(L) << " ...\n";
 
         interval_t a = 0.5, b = 1.0;
 
         // invariant density h
-        Cheb_i h = lsv.h();
+        Cheb_i h = h_meta.h;
 
         VectorXi hv = h.coef();
 
-        cout << "Error in Lh - h: " << (R * hv - hv).norm() << "\n";
+        cout << "Error in Lh - h: " << (L * hv - hv).norm() << "\n";
         cout << "First coeff of h: \n" << hv.head(5).transpose()
             << "\n";
         cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
