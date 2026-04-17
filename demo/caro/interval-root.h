@@ -9,6 +9,7 @@
 #include <complex>
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include <Eigen/SVD>
 
 #include <boost/multiprecision/mpfr.hpp>
 #include <boost/multiprecision/mpfi.hpp>
@@ -273,5 +274,100 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     return X;
 }
 
+// Given a matrix, return an interval enclosing all singular values, if only_top = false,
+// and only the top singular value if only_top = true
+template <unsigned d10>
+interval_t<d10> matrix_sigma_bounds(const MatrixXi<d10> &W, bool only_top = false) {
+    using i_t = interval_t<d10>;
+    using Mi_t = MatrixXi<d10>;
 
+    assert(W.rows() == W.cols());
+    const int n = W.rows();
+
+    Mi_t WtW = W.transpose() * W;
+    i_t eig;
+
+    for (int i = 0; i < n; i++) {
+        i_t center = WtW(i,i);
+        i_t radius = 0;
+        for (int j = 0; j < n; j++)
+            if (i != j)
+                radius += bmp::upper(i_t(abs(WtW(i,j))));
+        i_t e = center + i_t(-bmp::upper(radius), bmp::upper(radius));
+
+        if (i == 0) {
+            eig = e;
+        } else if (!only_top) {
+            eig = bmp::hull(eig, e);
+        } else if (only_top) {
+            eig = i_t(
+                    max(bmp::lower(eig), bmp::lower(center)),
+                    max(bmp::upper(eig), bmp::upper(e))
+                    );
+        }
+    }
+
+    if (bmp::lower(eig) < 0)
+        eig = i_t(0, bmp::upper(eig));
+
+    return sqrt(eig);
 }
+
+// A basic rigorous estimate or the top singular value of a square
+// interval matrix, using a floating-point SVD and Gershgorin discs
+template <unsigned d10>
+interval_t<d10> matrix_L2_norm(const MatrixXi<d10> &Q) {
+    using i_t = interval_t<d10>;
+    using M_t = MatrixXr<d10>;
+    using Mi_t = MatrixXi<d10>;
+
+    assert(Q.rows() == Q.cols());
+    const int n = Q.rows();
+
+    // median
+    M_t M(n, n);
+    for(int i = 0; i < n; i++)
+        for(int j = 0; j < n; j++)
+            M(i,j) = bmp::median(Q(i,j));
+
+    // floating point SVD
+    Eigen::JacobiSVD<M_t> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    // M = U D V^*
+    M_t U_fp = svd.matrixU();
+    M_t V_fp = svd.matrixV();
+    std::cout << "****\n"
+        << (U_fp.transpose() * M * V_fp).topLeftCorner(5,5)
+        << "\n****\n";
+
+    // interval versions of U, V
+    Mi_t U(n, n), V(n, n);
+    for(int i = 0; i < n; i++) {
+        for(int j = 0; j < n; j++) {
+            U(i,j) = i_t(U_fp(i,j));
+            V(i,j) = i_t(V_fp(i,j));
+        }
+    }
+
+    // an approximate SVD in interval arithmetic:
+    // Q contained in (U^*)^{-1} S V^{-1}, where S = U^* Q V
+    Mi_t S = U.transpose() * Q * V;
+
+    // now, the max singular value of Q is in the interval
+    // sigma_U^{-1} * top_sigma_S * sigma_V^{-1},
+    // where sigma_U, sigma_V are intervals enclosing singular values of U,V,
+    // and top_sigma_S encloses the top singular value of S, all
+    // computed simply with Gershgorin discs
+
+    i_t sigma_U = matrix_sigma_bounds(U),
+          sigma_V = matrix_sigma_bounds(V),
+          sigma_S = matrix_sigma_bounds(S, true);
+
+    assert(sigma_U > 0 && sigma_V > 0);
+
+    std::cout << "sigma_U: " << sigma_U << ", sigma_V: " << sigma_V << ", sigma_S: " << sigma_S << "\n"
+        << S.topLeftCorner(5,5) << "\n";
+
+    return sigma_S / (sigma_U * sigma_V);
+}
+
+} // namespace
