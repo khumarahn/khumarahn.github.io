@@ -43,7 +43,7 @@ class LSV {
     public:
         // PREC is binary target precision;
         // DIGITS is decimal working precision, it should be finer than the target precision
-        static constexpr int DIGITS = PREC / 3; // PREC / 3;
+        static constexpr int DIGITS = PREC * 4; // PREC / 3; // FIXME
         using real_t     = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
@@ -174,7 +174,7 @@ class LSV {
             interval_t Rad = interval_t(80) / interval_t(100);
 
             mlogeps_ = log(interval_t(2)) * PREC_;
-            N_ = int(ceil(mlogeps_ / Rad)) + 42; // FIXME
+            N_ = int(ceil(mlogeps_ / Rad)); // FIXME
 
             abel_n_ = int(ceil(mlogeps_)) - 1;
             std::cout << "Computing Abel function coeffs and constants...\n";
@@ -464,27 +464,39 @@ class LSV {
             };
 
             // norm of an operator given by a matrix
-            // in an ellipse with paramater rho
-            auto norm_Q = [] (MatrixXi Q, interval_t rho) {
+            // corresponding to Lemma \ref{lem:mnorm}
+            auto norm_Q = [] (const MatrixXi& Q, interval_t rho_A, interval_t rho_C) {
                 assert(Q.cols() == Q.rows());
-
                 int n = Q.cols();
 
-                VectorXi D(n), E(n);
-                D(0) = interval_t(1) / 2;
-                E(0) = 2;
-                for (int j = 1; j < n; j++) {
-                    D(j) = (pow(rho, j) + pow(rho, -j)) / 2;
-                    E(j) = pow(rho, -j) * 2;
+                VectorXi d_C(n), inv_d_A(n);
+                d_C(0) = interval_t(1) / 2;
+                inv_d_A(0) = 2;
+                for (int k = 1; k < n; k++) {
+                    d_C(k) = sqrt(pow(rho_C, 2*k) + pow(rho_C, -2*k)) / 2;
+                    inv_d_A(k) = 2 / sqrt(pow(rho_A, 2*k) + pow(rho_A, -2*k));
                 }
 
-                interval_t r = 0;
+                interval_t K_AC_sq = 0;
+                for (int k = 0; k < n; k++) {
+                    interval_t num = pow(pow(rho_A, k) + pow(rho_A, -k), 2);
+                    interval_t den = pow(rho_C, 2*k) + pow(rho_C, -2*k);
+                    K_AC_sq += num / den;
+                }
+                interval_t K_AC = sqrt(K_AC_sq);
+
+                MatrixXi DQD(n, n);
                 for (int j = 0; j < n; j++) {
                     for (int k = 0; k < n; k++) {
-                        r += abs(D(j) * Q(j,k) * E(k));
+                        DQD(j, k) = d_C(j) * Q(j, k) * inv_d_A(k);
                     }
                 }
+                std::cout << "\n####\n" << DQD.topRightCorner(4,4) << "\n####\n\n";
+                std::cout << "\n####\n" << DQD.bottomLeftCorner(4,4) << "\n####\n\n";
 
+                interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
+
+                interval_t r = K_AC * DQD_norm;
                 r = bmp::upper(r);
                 return r;
             };
@@ -533,24 +545,24 @@ class LSV {
 
             const MatrixXi bDelta = L - u * iota.transpose();
 
-            int n = 0;
 
             std::vector<interval_t> delta;
             std::vector<interval_t> norm_bDelta;
             norm_bDelta.push_back(1);
 
+            int n = 0;
             for (MatrixXi bDelta_n = bDelta; ; n++) {
                 interval_t d = 0;
                 for (int k = 0; k <= n; k++)
                     d += n_choose_k(n, k) * norm_bDelta[k] * pow(eps, n - k);
                 delta.push_back(d);
 
-                std::cout << "** n: " << n << ", delta[n]: " << delta[n] << "\n";
-                if (bmp::upper(delta[n]) < 0.5 || n > 32)
+                std::cout << "** n: " << n << ", delta[n]: " << delta[n] << ", norm_bDelta[n]: " << norm_bDelta[n] << "\n";
+                if (bmp::upper(delta[n]) < 0.5 || n > 4)
                     break;
 
                 bDelta_n *= bDelta;
-                norm_bDelta.push_back(norm_Q(bDelta_n, rho_A));
+                norm_bDelta.push_back(norm_Q(bDelta_n, rho_A, rho_C));
             }
 
             return meta;
@@ -783,7 +795,7 @@ void LSV<PREC>::compute_abel_stuff() {
 
     {   // compute a "good" value of r, for which
         // C0 / (r-1)^n is smaller than desired precision
-        i_t accuracy = pow(i_t(2), - PREC_);
+        i_t accuracy = pow(i_t(2), - PREC_) * pow(i_t(6), N_);
         abel_r_good_ = 1 + bmp::upper(pow(abel_C0_ / accuracy, i_t(1) / i_t(n)));
 
         abel_r_good_ = max(abel_r_good_, abel_r_ + r_t(1));
@@ -823,12 +835,12 @@ void LSV<PREC>::compute_abel_stuff() {
             t = pow(x, -gamma_);
 
             // unremarkable, but we set the number of derivatives L here
-            L_ = 1 + Nstar_ / 2;
+            L_ = max(1 + Nstar_ / 2, 2 * N_);
 
             if (bmp::lower(t) > abel_r_good_) {
                 // +20 is arbitrary: we need \nu suffuciently large
                 r_t min_At = 20 + bmp::upper(
-                        Ar1 + i_t(L_) / (e_ * pi_ * abel_varkappa1_)
+                        Ar1 + 8 * i_t(L_) / (e_ * pi_ * abel_varkappa1_)
                         );
                 r_t At = bmp::lower(abel_t(t)(0));
                 if (At > min_At) {
