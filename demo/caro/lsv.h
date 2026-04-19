@@ -117,6 +117,11 @@ class LSV {
         VectorXci derivatives_s_,
                   derivatives_c_;
 
+        // Constant part of error in evaluation of sums for
+        // first N_ basis Chebyshev polynomials
+        VectorXi cheb_sum_small_const_error_;
+        void compute_cheb_sum_small_const_error();
+
         void compute_derivatives_cs() {
             // check that required constants are set
             assert(halfM_ > 0 && M_ > 0 && Nstar_ > 0 && L_ > 0);
@@ -208,6 +213,7 @@ class LSV {
             Mhat_ = 2 * M_;
 
             compute_derivatives_cs();
+            compute_cheb_sum_small_const_error();
         }
 
         int NCheb() const { return N_; };
@@ -252,14 +258,16 @@ class LSV {
             return Vector2<var_t>((x + var_t(1)) / var_t(2), 0.5);
         }
 
-        // Transfer operator for the induced map, the clever one.
-        // This returns an approximation of the induced transfer operator by an
-        // N_ by N_ matrix acting on the Chebyshev coefficients.
-        MatrixXi Lind() const {
-            const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
-            const VectorXi x_nodes = cheb.nodes();
+        // sum S(x) = \sum_{k \geq 0} \varphi((x_k + 1) / 2) / J_k(x_k)
+        // where \varphi is the vector of first N_ Chebyshev basis polynomials
+        VectorXi cheb_sum (const interval_t &x) const {
+            VectorXi r = VectorXi::Zero(N_);
 
-            // values of first N Chebyshev polynomials at the preimage on [1/2,1]
+            // for integrals only
+            const interval_cheb_t cheb(interval_t(1) / 2, 1, 1);
+
+            // values of first N Chebyshev polynomials at the
+            // preimage on [1/2,1]
             auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
                 var_t y = this->right_inv(x)(0);
                 // slow trigonometric evaluation is more precise
@@ -268,51 +276,9 @@ class LSV {
                 return r;
             };
 
-            // constant part of the error in S_small, except for multiplication
-            // by |A'(x)|.
-            const VectorXi S_small_error = [this] () {
-                const interval_t &nu = abel_nu_;
-                const real_t &vk = abel_varkappa1_;
-
-                interval_t Lfac = 1;
-                for (int ell = 1; ell <= 2 * L_ + 1; ell++)
-                    Lfac *= ell;
-
-                interval_t E;
-
-                E = Lfac * nu / (L_ * pow(2 * pi_ * nu * vk, 2 * L_ + 1));
-
-                E += pi_ * pi_ * e_ * nu * vk /
-                    ( 6 *
-                      (pow((2 * pi_ * e_ * nu * vk) / (2 * L_ - 1), 2) - 1) *
-                      (exp(interval_t(M_)) - 1)
-                    );
-
-                E /= (gamma_ * abel_am1_minus_C1_ * pow(abel_r1_, 1 + 1 / gamma_));
-
-                // maxima of Chebyshev polynomials in the petal Re(t) > r1
-                VectorXi cheb_max_r1(N_);
-                {
-                    interval_t rr = 2 * pow(abel_r1_, - 1 / gamma_),
-                               tt = 1 + rr + sqrt(rr * rr + 2 * rr);
-                    for (int i = 0; i < N_; i++)
-                        cheb_max_r1(i) = (pow(tt, i) + pow(tt, -i)) / 2;
-                }
-
-                VectorXi EE = E * cheb_max_r1;
-
-                for (int i = 0; i < N_; i++) {
-                    assert(EE(i) > 0);
-                    real_t ei = bmp::upper(EE(i));
-                    EE(i) = interval_t(-ei, ei);
-                }
-                return EE;
-            }();
-
-
             // for a **small** real x, return a rigorous approximation of S(z) = S(x^\gamma)
             // for the vector-valued observable of first N Chebyshev polynomials
-            auto S_small = [this, &cheb, &phi, &S_small_error](const interval_t &x) -> VectorXi {
+            auto S_small = [this, &cheb, &phi](const interval_t &x) -> VectorXi {
                 //interval_t z = pow(x, gamma_);
                 VectorXi r = VectorXi::Zero(N_);
                 Vector2i Ax = this->abel(x);
@@ -341,37 +307,40 @@ class LSV {
                 }
 
                 // error
-                r += abs(Ax(1)) * S_small_error;
+                r += abs(Ax(1)) * cheb_sum_small_const_error_;
 
                 return r;
             };
 
-            // now compute S when x is not necessarily small
-            auto S = [this, &S_small, &phi](const interval_t &x) -> VectorXi const {
-                VectorXi r = VectorXi::Zero(N_);
+            interval_t xk = x,
+                       inv_Jk = 1;
 
-                interval_t xk = x,
-                           inv_Jk = 1;
+            // add branches naively up to Nstar
+            for (int k = 0; k < Nstar_; k++) {
+                r += phi(xk) * inv_Jk;
+                Vector2i y = left_inv(xk);
+                xk = y(0);
+                inv_Jk *= y(1);
+            }
 
-                // add branches naively up to Nstar
-                for (int k = 0; k < Nstar_; k++) {
-                    r += phi(xk) * inv_Jk;
-                    Vector2i y = left_inv(xk);
-                    xk = y(0);
-                    inv_Jk *= y(1);
-                }
+            // add the rest when xk is small
+            r += S_small(xk) * inv_Jk;
+            return r;
+        }
 
-                // add the rest when xk is small
-                r += S_small(xk) * inv_Jk;
-                return r;
-            };
+        // Transfer operator for the induced map, the clever one.
+        // This returns an approximation of the induced transfer operator by an
+        // N_ by N_ matrix acting on the Chebyshev coefficients.
+        MatrixXi Lind() const {
+            const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
+            const VectorXi x_nodes = cheb.nodes();
 
             // Compute (L T_n)(x) for n=0,...,N-1 and x in the node points
             MatrixXi L_values(N_, N_);
 #pragma omp parallel for schedule(dynamic)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes[ix];
-                L_values.col(ix) = S(x) / interval_t(2);
+                L_values.col(ix) = cheb_sum(x) / interval_t(2);
             }
 
             // Approximate the result with Chebyshev polynomials
@@ -889,6 +858,52 @@ void LSV<PREC>::compute_abel_stuff() {
     assert( abel_nu_ > 0 );
 
     assert(2 * pi_ * e_ * abel_nu_ * abel_varkappa1_ > 2 * L_ - 1);
+
+    return;
+}
+
+
+// precompute the constant part of the error in cheb_sum,
+// except for multiplication by |A'(x)|.
+template <int PREC>
+void LSV<PREC>::compute_cheb_sum_small_const_error() {
+    const interval_t &nu = abel_nu_;
+    const real_t &vk = abel_varkappa1_;
+
+    interval_t Lfac = 1;
+    for (int ell = 1; ell <= 2 * L_ + 1; ell++)
+        Lfac *= ell;
+
+    interval_t E;
+
+    E = Lfac * nu / (L_ * pow(2 * pi_ * nu * vk, 2 * L_ + 1));
+
+    E += pi_ * pi_ * e_ * nu * vk /
+        ( 6 *
+          (pow((2 * pi_ * e_ * nu * vk) / (2 * L_ - 1), 2) - 1) *
+          (exp(interval_t(M_)) - 1)
+        );
+
+    E /= (gamma_ * abel_am1_minus_C1_ * pow(abel_r1_, 1 + 1 / gamma_));
+
+    // maxima of Chebyshev polynomials in the petal Re(t) > r1
+    VectorXi cheb_max_r1(N_);
+    {
+        interval_t rr = 2 * pow(abel_r1_, - 1 / gamma_),
+                   tt = 1 + rr + sqrt(rr * rr + 2 * rr);
+        for (int i = 0; i < N_; i++)
+            cheb_max_r1(i) = (pow(tt, i) + pow(tt, -i)) / 2;
+    }
+
+    VectorXi EE = E * cheb_max_r1;
+
+    for (int i = 0; i < N_; i++) {
+        assert(EE(i) > 0);
+        real_t ei = bmp::upper(EE(i));
+        EE(i) = interval_t(-ei, ei);
+    }
+
+    cheb_sum_small_const_error_ = EE;
 
     return;
 }
