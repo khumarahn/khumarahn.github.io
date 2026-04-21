@@ -260,7 +260,7 @@ class LSV {
 
         // sum S(x) = \sum_{k \geq 0} \varphi((x_k + 1) / 2) / J_k(x_k)
         // where \varphi is the vector of first N_ Chebyshev basis polynomials
-        VectorXi cheb_sum (const interval_t &x) const {
+        VectorXi cheb_sum(const interval_t &x) const {
             VectorXi r = VectorXi::Zero(N_);
 
             // for integrals only
@@ -418,18 +418,22 @@ class LSV {
                 // semi-axis
                 interval_t a = (rho + 1 / rho) / 8,
                            b = (rho - 1 / rho) / 8;
+                // leftmost point of the ellipse
+                interval_t p = interval_t(3) / 4 - a;
 
-                interval_t beta = interval_t(max(bmp::lower(gamma_), real_t(1)), max(bmp::upper(gamma_), real_t(1))),
-                           r = pow(interval_t(3) / 4 - a, beta),
-                           R = pow(interval_t(3) / 2 + 2 * a, beta),
-                           phi = beta * asin(sqrt(interval_t(2)) * b);
+                // if this condition is true, then the backward
+                // orbit of p is the least contracting, and the
+                // norm of \cL is bounded by 1/2 S(p), where
+                // the sum S is computed for the observable v \equiv 1
+                assert(gamma_ < (12 * a - 1) / (16 * a * a - 1));
 
-                interval_t term_r = pow(r + 1, 4) / pow(r, 2 + 1 / beta),
-                           term_R = pow(R + 1, 4) / pow(R, 2 + 1 / beta);
+                // the sum S for the vector of observables [1/2, ...]
+                VectorXi S = cheb_sum(p);
 
-                interval_t K = max(term_r, term_R) / pow(cos(phi), 3);
+                // times 2 and divide by 2 cancel out
+                interval_t S0 = bmp::upper(S(0));
 
-                return bmp::upper(K);
+                return S0;
             };
 
             // norm of an operator given by a matrix
