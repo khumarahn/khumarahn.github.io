@@ -15,5 +15,8 @@ debug: lsv-cpp.x
 lsv-cpp.x: *.h *.cpp Makefile
 	clang++ $(LL) $(DD) -O3 -march=native lsv-debug.cpp -o lsv-cpp.x
 
+loop: debug
+	time ./lsv-cpp.x && false
+
 .PHONY test::
 	clang++ $(LL) $(DD) -O3 -march=native test.cpp -o test.x

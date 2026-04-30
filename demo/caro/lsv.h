@@ -43,7 +43,7 @@ class LSV {
     public:
         // PREC is binary target precision;
         // DIGITS is decimal working precision, it should be finer than the target precision
-        static constexpr int DIGITS = PREC * 4; // PREC / 3; // FIXME
+        static constexpr int DIGITS = PREC * 2; // PREC / 3; // FIXME
         using real_t     = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
@@ -454,12 +454,15 @@ class LSV {
                 interval_t K_AC = sqrt(K_AC_sq);
 
                 MatrixXi DQD(n, n);
+                real_t max_DQD_width = 0;
                 for (int j = 0; j < n; j++) {
                     for (int k = 0; k < n; k++) {
                         DQD(j, k) = d_C(j) * Q(j, k) * inv_d_A(k);
+                        max_DQD_width = max(max_DQD_width, bmp::width(DQD(j, k)));
                     }
                 }
-                std::cout << "\n####\n" << DQD.bottomLeftCorner(4,4) << "\n####\n\n";
+                std::cout << "Max width of the intervals in DQD: " << max_DQD_width
+                << "  [bad if large]\n";
 
                 interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
 
@@ -524,14 +527,13 @@ class LSV {
                     d += n_choose_k(n, k) * norm_bDelta[k] * pow(eps, n - k);
                 delta.push_back(d);
 
-                std::cout << "** n: " << n << ", delta[n]: " << delta[n] << ", norm_bDelta[n]: " << norm_bDelta[n] << "\n";
-
                 if (bmp::upper(delta[n]) < 0.5 || n > 4)
                     break;
 
                 bDelta_n *= bDelta;
                 norm_bDelta.push_back(norm_Q(bDelta_n, rho_A_, rho_C_));
             }
+            std::cout << "** n: " << n << ", delta[n]: " << delta[n] << ", norm_bDelta[n]: " << norm_bDelta[n] << "\n";
 
             assert(delta[n] < 0.5);
 
@@ -844,7 +846,10 @@ void LSV<PREC>::compute_abel_stuff() {
         // exponential factor which should be outweighed by
         // L / (pi e nu varkappa_1)
         i_t x = 2 * pow(abel_r1_, - 1 / gamma_),
-            G = 2 * rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
+            G_extra_factor = 128, // FIXME: what should this factor be?
+                                  // It seems to be mostly needed to prevent matrix operator norms
+                                  // from exploding
+            G = G_extra_factor * rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
             fatty = pow(i_t(2), PREC_) * pow(G, N_);
 
         i_t L_nu_factor = 24 + PREC_ / 16;

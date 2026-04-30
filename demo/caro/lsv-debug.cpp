@@ -85,6 +85,9 @@ int main() {
         cout << "First coeff of h: \n" << hv.head(5).transpose()
             << "\n";
         cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
+
+        cout << "rho_A: " << h_meta.rho_A
+            << ", max error for h in A: " << h_meta.err << "\n";
     }
 
     return 0;
