@@ -91,11 +91,11 @@ class LSV {
         VectorXr  abel_coef_ni_;
 
         MatrixXi abel_matrix() const;
+        void compute_ellipses();
         void compute_abel_stuff();
 
         static constexpr int PREC_ = PREC;
-        interval_t mlogeps_;
-        int N_, Nstar_, L_, halfM_, M_, Mhat_;
+        int N_, Nstar_, L_, halfM_, M_;
 
         // Constants for the Abel function, with \tA = \tilde{A} and \hA = \hat{A},
         // \tA_n(t) = a_{-1} + a_\ell + a_0 + a_1 t + ... + a_n t^n
@@ -113,6 +113,9 @@ class LSV {
         // * misc
         real_t abel_delta1_,        // = C1 / sqrt(a_{-1}^2 - C1^2)
                abel_varkappa1_;     // = (1 + delta1^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
+
+        // parameters \rho of the ellipses
+        interval_t rho_A_, rho_B_, rho_C_;
 
         VectorXci derivatives_s_,
                   derivatives_c_;
@@ -175,18 +178,29 @@ class LSV {
         void set_gamma(const interval_t &gamma) {
             gamma_ = gamma;
 
+            compute_ellipses();
+
+            interval_t mlogeps = log(interval_t(2)) * PREC_;
+
+            N_ = int(ceil(
+                        mlogeps / log(rho_C_ / rho_B_)
+                        ));
+            std::cout << "N_: " << N_ << "\n";
+
             // WHY?
-            interval_t Rad = interval_t(80) / interval_t(100);
+            //interval_t Rad = interval_t(80) / interval_t(100);
 
-            mlogeps_ = log(interval_t(2)) * PREC_;
-            N_ = int(ceil(mlogeps_ / Rad)); // FIXME
+            //N_ = int(ceil(mlogeps / Rad)); // FIXME
 
-            abel_n_ = int(ceil(mlogeps_)) - 1;
+            abel_n_ = int(ceil(mlogeps)) - 1;
             std::cout << "Computing Abel function coeffs and constants...\n";
-            std::cout << "abel_n_: " << abel_n_ << "\n";
             compute_abel_stuff();
             std::cout
+                << "rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
+                << ", rho_C_: " << rho_C_ << "\n"
+                << "rho_C_ / rho_A_: " << rho_C_ / rho_A_ << "\n"
                 << "Nstar_: " << Nstar_ << "\n"
+                << "abel_n_: " << abel_n_ << "\n"
                 << "abel_r_: " << abel_r_ << ", "
                 << "abel_C0_: " << abel_C0_ << ", "
                 << "abel_r_good_: " << abel_r_good_ << "\n"
@@ -195,22 +209,9 @@ class LSV {
                 << "abel_delta1_: " << abel_delta1_ << ", "
                 << "abel_varkappa1_: " << abel_varkappa1_ << "\n"
                 << "abel_am1_minus_C1_: " << abel_am1_minus_C1_ << "\n"
-                << "abel_nu_: " << abel_nu_ << "\n"
+                << "L_: " << L_ << ", M_" << M_ << ", abel_nu_: " << abel_nu_ << "\n"
                 << "First Abel coefficients: " << abel_coef_ni_.head(5).transpose()
                 << "\n\n";
-
-            // L is the number of derivatives FIXME: what should it be?
-            // It used to be
-            //      L_ = 1 + Nstar_ / 2;
-            // but we need it in the computation of Nstar_, so now we set it there
-
-            // M is the number of points on the circle
-            halfM_ = L_;
-            M_ = 2 * halfM_;
-
-            assert(M_ >= 2*L_);
-
-            Mhat_ = 2 * M_;
 
             compute_derivatives_cs();
             compute_cheb_sum_small_const_error();
@@ -363,14 +364,16 @@ class LSV {
             interval_t a(interval_t(1) / 2),
                        b(1);
 
-            MatrixXi L = Lind();
+            meta.L = Lind();
+            const MatrixXi &L = meta.L;
             int N = L.cols();
 
-            meta.L = L;
+            // Cheb class for misc calculations
+            interval_cheb_t cheb(a, b, 1);
 
-
-            // iota is values of integrals on [1/2,1] of the basis Chebyshev polynomials
-            VectorXi iota = interval_cheb_t(a, b, 1).beta_integral(0, b, N);
+            // iota is a vector of values of integrals on [1/2,1] of the basis
+            // Chebyshev polynomials
+            VectorXi iota = cheb.beta_integral(0, b, N);
 
             VectorXi u = VectorXi::Zero(N);
             u(0) = 1 / iota(0);
@@ -383,35 +386,27 @@ class LSV {
             // h as a function
             meta.h = interval_cheb_t(hv, a, b);
 
-            // *** Now h and L are computed,
-            // *** error and ellipses to go
+            // bound sup norm of h in an ellipse
+            auto norm_h = [h = meta.h, N] (interval_t rho) {
+                // major semi-axes
+                interval_t a = (rho + 1 / rho) / 8;
+                // left point
+                interval_t x = interval_t(3) / 4 - a;
 
-            // sector
-            interval_t sin_theta_C = min(
-                    interval_t(1),
-                    interval_t(bmp::lower(interval_t(
-                                sin(pi_ / (2 * gamma_))
+                interval_t r = 0;
+                for (int k = 0; k < N; k++) {
+                    // max value of k-th basis polynomial in the ellipse
+                    interval_t Tk_max = interval_t(1) / 2;
+                    if (k > 0)
+                        Tk_max *= pow(rho, k) + pow(rho, -k);
+                    r += abs(h.coef(k) * Tk_max);
+                }
 
-                                )))
-                    );
+                r = bmp::upper(r);
+                return r;
+            };
 
-            // C
-            interval_t rho_C = sqrt(1 + 8 * pow(sin_theta_C, 2))
-                + sqrt(interval_t(8)) * sin_theta_C;
-
-            // try!
-            rho_C = pow(rho_C, interval_t(7) / 8);
-
-            // B
-            interval_t s_B = 1 + (rho_C + 1 / rho_C) / 2,
-                       rho_B = (s_B + sqrt(s_B * s_B - 4)) / 2;
-
-            // A, Z
-            interval_t rho_A = sqrt( rho_B * rho_C);
-
-            assert(rho_B < rho_A && rho_A < rho_C);
-
-            std::cout << "rho_C: " << rho_C << ", rho_A: " << rho_A << ", ratio: " << rho_C / rho_A << "\n";
+            // *** Now h and L are computed
 
             // norm of \cL from B to an ellipse with parameter rho
             auto norm_L = [this] (interval_t rho) {
@@ -464,7 +459,6 @@ class LSV {
                         DQD(j, k) = d_C(j) * Q(j, k) * inv_d_A(k);
                     }
                 }
-                std::cout << "\n####\n" << DQD.topRightCorner(4,4) << "\n####\n\n";
                 std::cout << "\n####\n" << DQD.bottomLeftCorner(4,4) << "\n####\n\n";
 
                 interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
@@ -494,12 +488,12 @@ class LSV {
             };
 
             // more norms
-            interval_t norm_I_pi_C_A = norm_I_pi(rho_C, rho_A),
-                       norm_I_pi_A_B = norm_I_pi(rho_A, rho_B),
-                       norm_L_B_A = norm_L(rho_A),
-                       norm_L_B_C = norm_L(rho_C),
+            interval_t norm_I_pi_C_A = norm_I_pi(rho_C_, rho_A_),
+                       norm_I_pi_A_B = norm_I_pi(rho_A_, rho_B_),
+                       norm_L_B_A = norm_L(rho_A_),
+                       norm_L_B_C = norm_L(rho_C_),
                        norm_L_A_C = norm_L_B_C,
-                       norm_u_iota_I_pi_A = norm_I_pi(rho_A, 1);
+                       norm_u_iota_I_pi_A = norm_I_pi(rho_A_, 1);
 
             // print all norms above:
             std::cout << "norm_I_pi_C_A: " << norm_I_pi_C_A << "\n"
@@ -531,12 +525,31 @@ class LSV {
                 delta.push_back(d);
 
                 std::cout << "** n: " << n << ", delta[n]: " << delta[n] << ", norm_bDelta[n]: " << norm_bDelta[n] << "\n";
+
                 if (bmp::upper(delta[n]) < 0.5 || n > 4)
                     break;
 
                 bDelta_n *= bDelta;
-                norm_bDelta.push_back(norm_Q(bDelta_n, rho_A, rho_C));
+                norm_bDelta.push_back(norm_Q(bDelta_n, rho_A_, rho_C_));
             }
+
+            assert(delta[n] < 0.5);
+
+            meta.rho_A = rho_A_;
+
+            interval_t norm_h_A = norm_h(rho_A_);
+            std::cout << "Bound on norm of h in A: " << norm_h_A << "\n";
+
+            {   // error
+                interval_t err = 0;
+                for (int k = 0; k < n; k++)
+                    err += delta[k];
+
+                err *= 2 * eps * norm_h_A;
+                meta.err = bmp::upper(err);
+            }
+
+            std::cout << "meta.err: " << meta.err << "\n";
 
             return meta;
         }
@@ -701,8 +714,34 @@ class LSV {
 };  // class LSV
 
 template <int PREC>
-void LSV<PREC>::compute_abel_stuff() {
+void LSV<PREC>::compute_ellipses() {
+    using i_t = interval_t;
 
+    // sector
+    i_t sin_theta_C = min(
+            i_t(1),
+            i_t(bmp::lower(i_t(sin(pi_ / (2 * gamma_)))))
+            );
+
+    // a rho when the ellipse would touch the sector boundary
+    i_t rho_max = sqrt(1 + 8 * pow(sin_theta_C, 2))
+        + sqrt(i_t(8)) * sin_theta_C;
+
+    // decrease it a bit, so it is away from the sector boundary
+    rho_C_ = pow(rho_max, interval_t(7) / 8);
+
+    // B
+    i_t s_B = 1 + (rho_C_ + 1 / rho_C_) / 2;
+    rho_B_ = (s_B + sqrt(s_B * s_B - 4)) / 2;
+
+    // A
+    rho_A_ = sqrt(rho_B_ * rho_C_);
+
+    assert(rho_B_ < rho_A_ && rho_A_ < rho_C_);
+}
+
+template <int PREC>
+void LSV<PREC>::compute_abel_stuff() {
     using r_t = real_t;
     using i_t = interval_t;
 
@@ -711,6 +750,8 @@ void LSV<PREC>::compute_abel_stuff() {
 
     abel_coef_.resize(n + 3);
     abel_coef_ni_.resize(n + 3);
+
+    assert(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_);
 
     {   // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
         VectorXi b = VectorXi::Zero(abel_n_ + 2);
@@ -766,9 +807,10 @@ void LSV<PREC>::compute_abel_stuff() {
         abel_C0_ = bmp::upper(pow(i_t(2), n + 1) * M * I / (gamma_ * b));
     }
 
-    {   // compute a "good" value of r, for which
-        // C0 / (r-1)^n is smaller than desired precision
-        i_t accuracy = pow(i_t(2), - PREC_) * pow(i_t(6), N_);
+    {   // r
+        // find a "good" value of r, for which  C0 / (r-1)^n
+        // is smaller than something rather arbitrary
+        i_t accuracy = pow(i_t(2), - PREC_);
         abel_r_good_ = 1 + bmp::upper(pow(abel_C0_ / accuracy, i_t(1) / i_t(n)));
 
         abel_r_good_ = max(abel_r_good_, abel_r_ + r_t(1));
@@ -777,7 +819,6 @@ void LSV<PREC>::compute_abel_stuff() {
     // now we can call abel_t, although the constant term is still zero
 
     {   // r1, C1
-
         // increase r1 until C1 is significantly smaller than a_{-1}
         i_t max_C1 = bmp::lower(i_t(abel_coef_(0) / 16));
         for (abel_r1_ = abel_r_good_ + 1; ; abel_r1_ += 1) {
@@ -796,10 +837,37 @@ void LSV<PREC>::compute_abel_stuff() {
         abel_varkappa1_ = bmp::lower(i_t(pow(1 - pow(C1am1, 2), i_t(1) / 2)));
     }
 
+    {   // L, nu, M
+        assert(abel_r1_ > 0 && rho_C_ > 0 && abel_varkappa1_ > 0 && N_ > 0);
+
+
+        // exponential factor which should be outweighed by
+        // L / (pi e nu varkappa_1)
+        i_t x = 2 * pow(abel_r1_, - 1 / gamma_),
+            G = 2 * rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
+            fatty = pow(i_t(2), PREC_) * pow(G, N_);
+
+        i_t L_nu_factor = 24 + PREC_ / 16;
+        i_t L =  log(fatty) / log(L_nu_factor);
+        i_t nu = L_nu_factor * L / (e_ * pi_ * abel_varkappa1_);
+
+        L_ = int(ceil(bmp::upper(L)));
+        abel_nu_ = bmp::upper(nu);
+
+        // M is the number of points on the circle
+        halfM_ = int(ceil(bmp::upper(i_t(
+                        log(fatty) / 2
+                        ))));
+        if (halfM_ < L_)
+            halfM_ = L_;
+        M_ = 2 * halfM_;
+    }
+
     i_t t_Nstar;
-    {   // Nstar and L
+    {   // Nstar
         // (instead of Caroline's Nstar_ = int(ceil(nu + mlogeps_)),
         // we slowly increase Nstar until the constraints are satisfied)
+
         i_t Ar1 = abel_t(i_t(abel_r1_))(0);
         i_t x = 1, t = 1;
 
@@ -807,13 +875,9 @@ void LSV<PREC>::compute_abel_stuff() {
             x = left_inv(x)(0);
             t = pow(x, -gamma_);
 
-            // unremarkable, but we set the number of derivatives L here
-            L_ = max(1 + Nstar_ / 2, 2 * N_);
-
             if (bmp::lower(t) > abel_r_good_) {
-                // +20 is arbitrary: we need \nu suffuciently large
-                r_t min_At = 20 + bmp::upper(
-                        Ar1 + 8 * i_t(L_) / (e_ * pi_ * abel_varkappa1_)
+                r_t min_At = bmp::upper(
+                        i_t(Ar1) + i_t(abel_nu_)
                         );
                 r_t At = bmp::lower(abel_t(t)(0));
                 if (At > min_At) {
@@ -850,6 +914,7 @@ void LSV<PREC>::compute_abel_stuff() {
                 ));
 
     // sanity checks
+    assert( rho_A_ > 0 && rho_B_ > 0 && rho_C_ > 0 );
     assert( abel_r_ > 0 );
     assert( abel_C0_ > 0 );
     assert( abel_r_good_ > 0 );
@@ -860,6 +925,7 @@ void LSV<PREC>::compute_abel_stuff() {
     assert( abel_varkappa1_ > 0 );
     assert( abel_am1_minus_C1_ > 0 );
     assert( abel_nu_ > 0 );
+    assert( L_ > 0 && halfM_ >= L_ && M_ == 2 * halfM_);
 
     assert(2 * pi_ * e_ * abel_nu_ * abel_varkappa1_ > 2 * L_ - 1);
 

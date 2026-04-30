@@ -335,9 +335,9 @@ interval_t<d10> matrix_L2_norm(const MatrixXi<d10> &Q) {
     // M = U D V^*
     M_t U_fp = svd.matrixU();
     M_t V_fp = svd.matrixV();
-    std::cout << "****\n"
-        << (U_fp.transpose() * M * V_fp).topLeftCorner(5,5)
-        << "\n****\n";
+    //std::cout << "****\n"
+    //    << (U_fp.transpose() * M * V_fp).topLeftCorner(5,5)
+    //    << "\n****\n";
 
     // interval versions of U, V
     Mi_t U(n, n), V(n, n);
@@ -364,8 +364,8 @@ interval_t<d10> matrix_L2_norm(const MatrixXi<d10> &Q) {
 
     assert(sigma_U > 0 && sigma_V > 0);
 
-    std::cout << "sigma_U: " << sigma_U << ", sigma_V: " << sigma_V << ", sigma_S: " << sigma_S << "\n"
-        << S.topLeftCorner(5,5) << "\n";
+    //std::cout << "sigma_U: " << sigma_U << ", sigma_V: " << sigma_V << ", sigma_S: " << sigma_S << "\n"
+    //    << S.topLeftCorner(5,5) << "\n";
 
     return sigma_S / (sigma_U * sigma_V);
 }
