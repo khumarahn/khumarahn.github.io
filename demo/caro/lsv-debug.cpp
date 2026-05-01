@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 48;   // in bits
+const int PREC = 64;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -11,8 +11,6 @@ const int PREC = 48;   // in bits
 #include "lsv.h"
 
 namespace bmp = boost::multiprecision;
-
-
 
 int main() {
     using LSV = lsv_ns::LSV<PREC>;
@@ -44,7 +42,7 @@ int main() {
     };
 
     for (real_t gamma = real_t(4) / 3; gamma <= 5; gamma += 50) {
-        cout << "gamma: " << gamma << "\n";
+        //cout << "gamma: " << gamma << "\n";
         LSV lsv(gamma);
 
         // Look at the coefficients of the Abel function
@@ -56,7 +54,7 @@ int main() {
             for (int i=0; i<abel_coef.size(); i++) {
                 err += bmp::width(abel_coef(i));
             }
-            cout << "L1 error in Abel coefficients: " << err << "\n";
+            //cout << "L1 error in Abel coefficients: " << err << "\n";
 
             //cout << "Abel coeff: " << abel_coef.transpose() << "\n";
         }
@@ -66,13 +64,13 @@ int main() {
         // as an N x N matrix acting on Chebyshev polynomials on [0.5,1]
         // with the first coeff doubled as in Numerical Recipes
         MatrixXi L = h_meta.L;
-        cout << "Transfer operator matrix computed...\n";
+        //cout << "Transfer operator matrix computed...\n";
         //cout << L.topLeftCorner(5,5) << "\n...\n";
-        const int N = L.cols();
-        cout << "N: " << N << "\n";
+        //const int N = L.cols();
+        //cout << "N: " << N << "\n";
 
-        // Make it a bit uncertain
-        cout << "Transfer operator retrieved, L1 uncertainty: " << uncertainty(L) << " ...\n";
+        auto L_uncertainty = uncertainty(L);
+        //cout << "Transfer operator retrieved, L1 uncertainty: " << L_uncertainty << " ...\n";
 
         interval_t a = 0.5, b = 1.0;
 
@@ -81,13 +79,13 @@ int main() {
 
         VectorXi hv = h.coef();
 
-        cout << "Error in Lh - h: " << (L * hv - hv).norm() << "\n";
-        cout << "First coeff of h: \n" << hv.head(5).transpose()
-            << "\n";
-        cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
+        //cout << "Error in Lh - h: " << (L * hv - hv).norm() << "\n";
+        //cout << "First coeff of h: \n" << hv.head(5).transpose()
+        //    << "\n";
+        //cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
 
-        cout << "rho_A: " << h_meta.rho_A
-            << ", max error for h in A: " << h_meta.err << "\n";
+        cout << "\nrho_A: " << h_meta.rho_A
+            << "\nERROR: " << h_meta.err << "\n";
     }
 
     return 0;

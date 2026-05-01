@@ -176,6 +176,8 @@ class LSV {
             set_gamma(gamma);
         }
         void set_gamma(const interval_t &gamma) {
+            std::cout << "Setting gamma_, computing Abel function coeffs and constants...";
+
             gamma_ = gamma;
 
             compute_ellipses();
@@ -185,36 +187,35 @@ class LSV {
             N_ = int(ceil(
                         mlogeps / log(rho_C_ / rho_B_)
                         ));
-            std::cout << "N_: " << N_ << "\n";
-
-            // WHY?
-            //interval_t Rad = interval_t(80) / interval_t(100);
-
-            //N_ = int(ceil(mlogeps / Rad)); // FIXME
 
             abel_n_ = int(ceil(mlogeps)) - 1;
-            std::cout << "Computing Abel function coeffs and constants...\n";
             compute_abel_stuff();
-            std::cout
-                << "rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
-                << ", rho_C_: " << rho_C_ << "\n"
-                << "rho_C_ / rho_A_: " << rho_C_ / rho_A_ << "\n"
-                << "Nstar_: " << Nstar_ << "\n"
-                << "abel_n_: " << abel_n_ << "\n"
-                << "abel_r_: " << abel_r_ << ", "
-                << "abel_C0_: " << abel_C0_ << ", "
-                << "abel_r_good_: " << abel_r_good_ << "\n"
-                << "abel_r1_: " << abel_r1_ << ", "
-                << "abel_C1_: " << abel_C1_ << "\n"
-                << "abel_delta1_: " << abel_delta1_ << ", "
-                << "abel_varkappa1_: " << abel_varkappa1_ << "\n"
-                << "abel_am1_minus_C1_: " << abel_am1_minus_C1_ << "\n"
-                << "L_: " << L_ << ", M_" << M_ << ", abel_nu_: " << abel_nu_ << "\n"
-                << "First Abel coefficients: " << abel_coef_ni_.head(5).transpose()
-                << "\n\n";
 
             compute_derivatives_cs();
             compute_cheb_sum_small_const_error();
+
+            interval_t CB_ratio = rho_C_ / rho_B_;
+            std::cout
+                << " done\n"
+                << "  gamma_: " << gamma_ << "\n"
+                << "  N_: " << N_ << "\n"
+                << "  rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
+                << ", rho_C_: " << rho_C_ << "\n"
+                << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio) << "\n"
+                << "  Nstar_: " << Nstar_ << "\n"
+                << "  abel_n_: " << abel_n_ << "\n"
+                << "  abel_r_: " << abel_r_
+                << ", abel_C0_: " << abel_C0_
+                << ", abel_r_good_: " << abel_r_good_ << "\n"
+                << "  abel_r1_: " << abel_r1_
+                << ", abel_C1_: " << abel_C1_ << "\n"
+                << "  abel_delta1_: " << abel_delta1_
+                << ", abel_varkappa1_: " << abel_varkappa1_ << "\n"
+                << "  abel_am1_minus_C1_: " << abel_am1_minus_C1_ << "\n"
+                << "  L_: " << L_ << ", M_: " << M_
+                << ", abel_nu_: " << abel_nu_ << "\n\n";
+
+            return;
         }
 
         int NCheb() const { return N_; };
@@ -461,8 +462,9 @@ class LSV {
                         max_DQD_width = max(max_DQD_width, bmp::width(DQD(j, k)));
                     }
                 }
-                std::cout << "Max width of the intervals in DQD: " << max_DQD_width
-                << "  [bad if large]\n";
+                //std::cout << "Max width of the intervals in DQD: " << max_DQD_width
+                //<< "  [bad if large]\n";
+                assert(max_DQD_width < 0.0001);
 
                 interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
 
@@ -487,7 +489,9 @@ class LSV {
             // parameters rho_1 and rho_2
             auto norm_I_pi = [N] (interval_t rho_1, interval_t rho_2) {
                 assert(rho_1 > rho_2);
-                return 8 / (pow(rho_1 / rho_2, N - 1) * log(rho_1 / rho_2));
+                interval_t norm = 8 / (pow(rho_1 / rho_2, N - 1) * log(rho_1 / rho_2));
+                norm = bmp::upper(norm);
+                return norm;
             };
 
             // more norms
@@ -498,20 +502,23 @@ class LSV {
                        norm_L_A_C = norm_L_B_C,
                        norm_u_iota_I_pi_A = norm_I_pi(rho_A_, 1);
 
-            // print all norms above:
-            std::cout << "norm_I_pi_C_A: " << norm_I_pi_C_A << "\n"
-                << "norm_I_pi_A_B: " << norm_I_pi_A_B << "\n"
-                << "norm_L_B_A: " << norm_L_B_A << "\n"
-                << "norm_L_B_C: " << norm_L_B_C << "\n"
-                << "norm_L_A_C: " << norm_L_A_C << "\n"
-                << "norm_u_iota_I_pi_A: " << norm_u_iota_I_pi_A << "\n";
-
             interval_t eps = norm_I_pi_C_A * norm_L_A_C
                 + norm_I_pi_C_A * norm_L_B_C * norm_I_pi_A_B
                 + norm_L_B_A * norm_I_pi_A_B
                 + norm_u_iota_I_pi_A;
+            eps = bmp::upper(eps);
 
-            std::cout << "eps: " << eps << "\n";
+            // print all norms above:
+            std::cout << "Computing norms and eps:\n"
+                << "  norm_I_pi_C_A: " << norm_I_pi_C_A
+                << ", norm_I_pi_A_B: " << norm_I_pi_A_B << "\n"
+                << "  norm_L_B_A: " << norm_L_B_A
+                << ", norm_L_B_C: " << norm_L_B_C
+                << ", norm_L_A_C: " << norm_L_A_C << "\n"
+                << "  norm_u_iota_I_pi_A: " << norm_u_iota_I_pi_A << "\n"
+                << "  eps: " << eps << "\n";
+
+            assert(eps < 0.1);
 
             const MatrixXi bDelta = L - u * iota.transpose();
 
@@ -533,9 +540,9 @@ class LSV {
                 bDelta_n *= bDelta;
                 norm_bDelta.push_back(norm_Q(bDelta_n, rho_A_, rho_C_));
             }
-            std::cout << "** n: " << n << ", delta[n]: " << delta[n] << ", norm_bDelta[n]: " << norm_bDelta[n] << "\n";
 
             assert(delta[n] < 0.5);
+            std::cout << "  delta[" << n << "] = " << delta[n] << " < 0.5\n";
 
             meta.rho_A = rho_A_;
 
@@ -551,7 +558,7 @@ class LSV {
                 meta.err = bmp::upper(err);
             }
 
-            std::cout << "meta.err: " << meta.err << "\n";
+            //std::cout << "meta.err: " << meta.err << "\n";
 
             return meta;
         }
@@ -731,13 +738,16 @@ void LSV<PREC>::compute_ellipses() {
 
     // decrease it a bit, so it is away from the sector boundary
     rho_C_ = pow(rho_max, interval_t(7) / 8);
+    rho_C_ = bmp::lower(rho_C_);
 
     // B
     i_t s_B = 1 + (rho_C_ + 1 / rho_C_) / 2;
     rho_B_ = (s_B + sqrt(s_B * s_B - 4)) / 2;
+    rho_B_ = bmp::upper(rho_B_);
 
     // A
     rho_A_ = sqrt(rho_B_ * rho_C_);
+    rho_A_ = bmp::median(rho_A_);
 
     assert(rho_B_ < rho_A_ && rho_A_ < rho_C_);
 }
