@@ -42,7 +42,8 @@ template <int PREC = 64>
 class LSV {
     public:
         // PREC is binary target precision;
-        // DIGITS is decimal working precision, it should be finer than the target precision
+        // DIGITS is decimal working precision,
+        // we need it quite a bit higher than the target precision
         static constexpr int DIGITS = PREC * 2; // PREC / 3; // FIXME
         using real_t     = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
@@ -188,7 +189,7 @@ class LSV {
                         mlogeps / log(rho_C_ / rho_B_)
                         ));
 
-            abel_n_ = int(ceil(mlogeps)) - 1;
+            abel_n_ = int(ceil(mlogeps)) * 2;
             compute_abel_stuff();
 
             compute_derivatives_cs();
@@ -819,10 +820,9 @@ void LSV<PREC>::compute_abel_stuff() {
         abel_C0_ = bmp::upper(pow(i_t(2), n + 1) * M * I / (gamma_ * b));
     }
 
-    {   // r
-        // find a "good" value of r, for which  C0 / (r-1)^n
-        // is smaller than something rather arbitrary
-        i_t accuracy = pow(i_t(2), - PREC_);
+    {   // find a "good" value of r, for which  C0 / (r-1)^n is small
+        i_t accuracy = pow(i_t(2), - PREC_) * pow(rho_C_, - N_)
+            * pow(1 + i_t(1) / 16, - N_);
         abel_r_good_ = 1 + bmp::upper(pow(abel_C0_ / accuracy, i_t(1) / i_t(n)));
 
         abel_r_good_ = max(abel_r_good_, abel_r_ + r_t(1));
@@ -856,14 +856,11 @@ void LSV<PREC>::compute_abel_stuff() {
         // exponential factor which should be outweighed by
         // L / (pi e nu varkappa_1)
         i_t x = 2 * pow(abel_r1_, - 1 / gamma_),
-            G_extra_factor = 128, // FIXME: what should this factor be?
-                                  // It seems to be mostly needed to prevent matrix operator norms
-                                  // from exploding
-            G = G_extra_factor * rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
+            G = rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
             fatty = pow(i_t(2), PREC_) * pow(G, N_);
 
         i_t L_nu_factor = 24 + PREC_ / 16;
-        i_t L =  log(fatty) / log(L_nu_factor);
+        i_t L =  log(fatty) / (2 * log(L_nu_factor));
         i_t nu = L_nu_factor * L / (e_ * pi_ * abel_varkappa1_);
 
         L_ = int(ceil(bmp::upper(L)));

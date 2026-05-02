@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 64;   // in bits
+const int PREC = 80;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -41,7 +41,7 @@ int main() {
         return err;
     };
 
-    for (real_t gamma = real_t(4) / 3; gamma <= 5; gamma += 50) {
+    for (real_t gamma = real_t(8) / 7; gamma <= 5; gamma += 50) {
         //cout << "gamma: " << gamma << "\n";
         LSV lsv(gamma);
 
