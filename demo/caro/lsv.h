@@ -177,7 +177,8 @@ class LSV {
             set_gamma(gamma);
         }
         void set_gamma(const interval_t &gamma) {
-            std::cout << "Setting gamma_, computing Abel function coeffs and constants...";
+            std::cout << "Setting gamma_, computing Abel function coeffs and constants..."
+                << std::flush;
 
             gamma_ = gamma;
 
@@ -200,6 +201,8 @@ class LSV {
             std::cout
                 << " done\n"
                 << "  gamma_: " << gamma_ << "\n"
+                << "  PREC_: " << PREC_
+                << ", DIGITS: " << DIGITS << "\n"
                 << "  N_: " << N_ << "\n"
                 << "  rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
                 << ", rho_C_: " << rho_C_ << "\n"
@@ -367,8 +370,10 @@ class LSV {
 
             interval_t a(interval_t(1) / 2),
                        b(1);
-
+            std::cout << "Computing the transfer operator matrix..."
+                << std::flush;
             meta.L = Lind();
+            std::cout << "  ... done!\n";
             const MatrixXi &L = meta.L;
             int N = L.cols();
 
@@ -755,8 +760,9 @@ void LSV<PREC>::compute_ellipses() {
     // A
     // a weighted geometric mean, perhaps maximizing
     // the ratio rho_C_ / rho_A_
-    i_t wB = i_t(13) / 16,
-        wC = 1 - wB;
+    i_t mlogeps = log(i_t(2)) * PREC_;
+    i_t wC = 12 / (mlogeps + 12);
+    i_t wB = 1 - wC;
     rho_A_ = exp(wB * log(rho_B_) + wC * log(rho_C_));
     rho_A_ = bmp::median(rho_A_);
 
