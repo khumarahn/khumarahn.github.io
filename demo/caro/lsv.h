@@ -186,7 +186,7 @@ class LSV {
             interval_t mlogeps = log(interval_t(2)) * PREC_;
 
             N_ = int(ceil(
-                        mlogeps / log(rho_C_ / rho_B_)
+                        mlogeps / log(rho_C_ / rho_A_)
                         ));
 
             abel_n_ = int(ceil(mlogeps)) * 2;
@@ -195,14 +195,16 @@ class LSV {
             compute_derivatives_cs();
             compute_cheb_sum_small_const_error();
 
-            interval_t CB_ratio = rho_C_ / rho_B_;
+            interval_t CB_ratio = rho_C_ / rho_B_,
+                       CA_ratio = rho_C_ / rho_A_;
             std::cout
                 << " done\n"
                 << "  gamma_: " << gamma_ << "\n"
                 << "  N_: " << N_ << "\n"
                 << "  rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
                 << ", rho_C_: " << rho_C_ << "\n"
-                << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio) << "\n"
+                << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio)
+                << ", rho_C_ / rho_A_: " << bmp::lower(CA_ratio) << "\n"
                 << "  Nstar_: " << Nstar_ << "\n"
                 << "  abel_n_: " << abel_n_ << "\n"
                 << "  abel_r_: " << abel_r_
@@ -509,6 +511,9 @@ class LSV {
                 + norm_u_iota_I_pi_A;
             eps = bmp::upper(eps);
 
+            interval_t eps_prime = norm_I_pi_C_A * norm_L_A_C;
+            eps_prime = bmp::upper(eps_prime);
+
             // print all norms above:
             std::cout << "Computing norms and eps:\n"
                 << "  norm_I_pi_C_A: " << norm_I_pi_C_A
@@ -517,7 +522,8 @@ class LSV {
                 << ", norm_L_B_C: " << norm_L_B_C
                 << ", norm_L_A_C: " << norm_L_A_C << "\n"
                 << "  norm_u_iota_I_pi_A: " << norm_u_iota_I_pi_A << "\n"
-                << "  eps: " << eps << "\n";
+                << "  eps: " << eps
+                << ", eps_prime: " << eps_prime << "\n";
 
             assert(eps < 0.1);
 
@@ -555,7 +561,7 @@ class LSV {
                 for (int k = 0; k < n; k++)
                     err += delta[k];
 
-                err *= 2 * eps * norm_h_A;
+                err *= 2 * eps_prime * norm_h_A;
                 meta.err = bmp::upper(err);
             }
 
@@ -747,8 +753,13 @@ void LSV<PREC>::compute_ellipses() {
     rho_B_ = bmp::upper(rho_B_);
 
     // A
-    rho_A_ = sqrt(rho_B_ * rho_C_);
+    // a weighted geometric mean, perhaps maximizing
+    // the ratio rho_C_ / rho_A_
+    i_t wB = i_t(13) / 16,
+        wC = 1 - wB;
+    rho_A_ = exp(wB * log(rho_B_) + wC * log(rho_C_));
     rho_A_ = bmp::median(rho_A_);
+
 
     assert(rho_B_ < rho_A_ && rho_A_ < rho_C_);
 }
