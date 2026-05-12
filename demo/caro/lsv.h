@@ -373,7 +373,7 @@ class LSV {
             std::cout << "Computing the transfer operator matrix..."
                 << std::flush;
             meta.L = Lind();
-            std::cout << "  ... done!\n";
+            std::cout << " done!\n";
             const MatrixXi &L = meta.L;
             int N = L.cols();
 
@@ -695,7 +695,7 @@ class LSV {
 
             ir_t factor0 = abel_C0_ * pow(abs(t), -abel_n_),
                  window0 (-bmp::upper(factor0), bmp::upper(factor0)),
-                 factor1 = abel_C0_ * pow(abs(t - i_t(1)), -abel_n_),
+                 factor1 = abel_C0_ * pow(abs(t) - i_t(1), -abel_n_),
                  window1 (-bmp::upper(factor1), bmp::upper(factor1));
 
             Vector2<i_t> r;
