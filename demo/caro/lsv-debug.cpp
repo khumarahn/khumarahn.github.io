@@ -84,6 +84,35 @@ int main() {
         //    << "\n";
         //cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
 
+        auto H = [&lsv, &h_meta] (const interval_t &x) {
+            interval_t r;
+            // sum without an error
+            interval_t S = lsv.cheb_sum(x).transpose() * h_meta.h.coef();
+            S /= 2;
+            // an error
+            interval_t E = lsv.eps_sum(x, h_meta.err);
+
+            r = S + E;
+            return r;
+        };
+
+        // try computing h
+        for (interval_t x = 0.75; x > 1.0 / 1024; x /= 2) {
+            //interval_t x = interval_t(1.0 / 1024, 1.0 / 1024 + 1e-6);
+            interval_t hx = h.value(x) + interval_t(-h_meta.err, h_meta.err),
+                       Hx = H(x),
+                       Hhx = Hx - hx;
+
+            cout << "\n"
+                << "h(" << x << "):" << hx << ", width: " << bmp::width(hx)
+                << "\n"
+                << "H(" << x << "):" << Hx << ", width: " << bmp::width(Hx)
+                << "\n"
+                << "diff: " << Hhx << ", width: " << bmp::width(Hhx)
+                << "\n";
+
+        }
+
         cout << "\nrho_A: " << h_meta.rho_A
             << "\nERROR: " << h_meta.err << "\n";
     }

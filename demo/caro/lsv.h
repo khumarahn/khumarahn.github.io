@@ -87,7 +87,8 @@ class LSV {
         static const real_t real_eps_;
         static const real_t real_eps_sqrt_;
 
-        interval_t gamma_;
+        interval_t gamma_,
+                   gamma_inv_;
         VectorXi abel_coef_;
         VectorXr  abel_coef_ni_;
 
@@ -103,17 +104,17 @@ class LSV {
         // * n:
         int abel_n_;
         // * |\tA(z) - \tA_n(z)| \leq C0 |t|^{-n}  when  Re(t) \geq r
-        real_t abel_r_, abel_C0_;
+        interval_t abel_r_, abel_C0_;
         // * \tA(t) is computed with desired accuracy when Re(t) \geq r_good
-        real_t abel_r_good_;
+        interval_t abel_r_good_;
         // * |\tA'(t) - a_{-1}| \leq C1 when Re(t) \geq r1,
         //   with C1 significantly smaller than a_{-1}
-        real_t abel_r1_, abel_C1_, abel_am1_minus_C1_;
+        interval_t abel_r1_, abel_C1_, abel_am1_minus_C1_;
         // * min distance from the Nstar-th preimage of 1 in the t-plane to r1
-        real_t abel_nu_;
+        interval_t abel_nu_;
         // * misc
-        real_t abel_delta1_,        // = C1 / sqrt(a_{-1}^2 - C1^2)
-               abel_varkappa1_;     // = (1 + delta1^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
+        interval_t abel_delta1_,        // = C1 / sqrt(a_{-1}^2 - C1^2)
+                   abel_varkappa1_;     // = (1 + delta1^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
 
         // parameters \rho of the ellipses
         interval_t rho_A_, rho_B_, rho_C_;
@@ -124,7 +125,9 @@ class LSV {
         // Constant part of error in evaluation of sums for
         // first N_ basis Chebyshev polynomials
         VectorXi cheb_sum_small_const_error_;
-        void compute_cheb_sum_small_const_error();
+        // Constant part of error in evaluation of sums of small functions
+        interval_t eps_sum_small_const_error_;
+        void compute_sum_small_const_error();
 
         void compute_derivatives_cs() {
             // check that required constants are set
@@ -182,6 +185,8 @@ class LSV {
 
             gamma_ = gamma;
 
+            gamma_inv_ = 1 / gamma_;
+
             compute_ellipses();
 
             interval_t mlogeps = log(interval_t(2)) * PREC_;
@@ -194,7 +199,7 @@ class LSV {
             compute_abel_stuff();
 
             compute_derivatives_cs();
-            compute_cheb_sum_small_const_error();
+            compute_sum_small_const_error();
 
             interval_t CB_ratio = rho_C_ / rho_B_,
                        CA_ratio = rho_C_ / rho_A_;
@@ -228,7 +233,7 @@ class LSV {
         int prec() const { return PREC_; };
         int KAbel() const { return abel_n_ + 1; };
         int abel_n() const { return abel_n_; };
-        interval_t alpha() const { return 1 / gamma_; };
+        interval_t alpha() const { return gamma_inv_; };
         interval_t gamma() const { return gamma_; };
         VectorXi abel_coef() const { return abel_coef_; };
 
@@ -306,6 +311,10 @@ class LSV {
 
                     VectorXi der = VectorXi::Zero(N_);
                     for (int m = 1; m <= halfM_; m++) {
+//std::cout << __LINE__
+//    << " x: " << x << ", width: " << bmp::width(x)
+//    << " Ax(0): " << Ax(0) << ", width: " << bmp::width(Ax(0))
+//    << "\n";
                         Vector2ci xm_inv = abel_inv(Ax(0) + s(m-1));
                         der += ( c(m-1) * phi(xm_inv(0)) * xm_inv(1) ).real();
                     }
@@ -315,7 +324,12 @@ class LSV {
                 }
 
                 // error
-                r += abs(Ax(1)) * cheb_sum_small_const_error_;
+                {
+                    interval_t w_minus_nu = Ax(0) - abel_nu_;
+                    interval_t tt = abel_t_inv(w_minus_nu)(0);
+                    assert(tt > abel_r1_);
+                    r += abs(Ax(1)) * pow(tt, -(1 + gamma_inv_)) * cheb_sum_small_const_error_;
+                }
 
                 return r;
             };
@@ -333,6 +347,38 @@ class LSV {
 
             // add the rest when xk is small
             r += S_small(xk) * inv_Jk;
+            return r;
+        }
+
+        // a bound on the sum S(x) = \sum_{k \geq 0} \varphi((x_k + 1) / 2) / J_k(x_k)
+        // where |\varphi| \leq \eps, and \varphi is analytic in \cP_1
+        interval_t eps_sum(const interval_t &x, const interval_t &eps = 1) const {
+            interval_t r = 0;
+
+            interval_t xk = x,
+                       inv_Jk = 1;
+
+            // add branches naively up to Nstar
+            for (int k = 0; k < Nstar_; k++) {
+                r += inv_Jk;
+                Vector2i y = left_inv(xk);
+                xk = y(0);
+                inv_Jk *= y(1);
+            }
+
+            Vector2i Axk = abel(xk);
+
+            // bound S(xk)
+            interval_t w_minus_nu = Axk(0) - abel_nu_;
+            interval_t tt = abel_t_inv(w_minus_nu)(0);
+            assert(tt > abel_r1_);
+
+            r += interval_t(1) / 2
+                + abs(Axk(1)) * (xk + pow(tt, -(1 + gamma_inv_)) * eps_sum_small_const_error_);
+
+            r *= eps;
+            real_t ru = bmp::upper(r);
+            r = interval_t(-ru, ru);
             return r;
         }
 
@@ -673,8 +719,8 @@ class LSV {
         Vector2<var_t> abel_inv(const var_t &a) const {
             Vector2<var_t> Ai = abel_t_inv(a);
             const var_t & t = Ai(0), dAt = Ai(1);
-            var_t x = pow(t, var_t(-1 / gamma_));
-            return Vector2<var_t>(x, -(x / t) / gamma_ * dAt);
+            var_t x = pow(t, var_t(-gamma_inv_));
+            return Vector2<var_t>(x, -(x / t) * gamma_inv_ * dAt);
         }
 
         // error term for abel_t
@@ -695,7 +741,7 @@ class LSV {
 
             ir_t factor0 = abel_C0_ * pow(abs(t), -abel_n_),
                  window0 (-bmp::upper(factor0), bmp::upper(factor0)),
-                 factor1 = abel_C0_ * pow(abs(t) - i_t(1), -abel_n_),
+                 factor1 = abel_C0_ * pow(abs(t) - 1, -abel_n_),
                  window1 (-bmp::upper(factor1), bmp::upper(factor1));
 
             Vector2<i_t> r;
@@ -851,6 +897,7 @@ void LSV<PREC>::compute_abel_stuff() {
         // increase r1 until C1 is significantly smaller than a_{-1}
         i_t max_C1 = bmp::lower(i_t(abel_coef_(0) / 16));
         for (abel_r1_ = abel_r_good_ + 1; ; abel_r1_ += 1) {
+            abel_r1_ = bmp::upper(abel_r1_); // to be safe
             i_t iC1 = abs(abel_coef_(1)) / abel_r1_ + abel_C0_ / pow(abel_r1_ - 1, n);
             for (int k = 1; k <= n; k++)
                 iC1 += k * abs(abel_coef_(2 + k)) / pow(abel_r1_, k + 1);
@@ -872,7 +919,7 @@ void LSV<PREC>::compute_abel_stuff() {
 
         // exponential factor which should be outweighed by
         // L / (pi e nu varkappa_1)
-        i_t x = 2 * pow(abel_r1_, - 1 / gamma_),
+        i_t x = 2 * pow(abel_r1_, - gamma_inv_),
             G = rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
             fatty = pow(i_t(2), PREC_) * pow(G, N_);
 
@@ -897,7 +944,7 @@ void LSV<PREC>::compute_abel_stuff() {
         // (instead of Caroline's Nstar_ = int(ceil(nu + mlogeps_)),
         // we slowly increase Nstar until the constraints are satisfied)
 
-        i_t Ar1 = abel_t(i_t(abel_r1_))(0);
+        i_t Ar1 = abel_t(abel_r1_)(0);
         i_t x = 1, t = 1;
 
         for (Nstar_ = 1; ; Nstar_++) {
@@ -905,9 +952,9 @@ void LSV<PREC>::compute_abel_stuff() {
             t = pow(x, -gamma_);
 
             if (bmp::lower(t) > abel_r_good_) {
-                r_t min_At = bmp::upper(
-                        i_t(Ar1) + i_t(abel_nu_)
-                        );
+                r_t min_At = bmp::upper(i_t(
+                        Ar1 + abel_nu_
+                        ));
                 r_t At = bmp::lower(abel_t(t)(0));
                 if (At > min_At) {
                     t_Nstar = t;
@@ -939,7 +986,7 @@ void LSV<PREC>::compute_abel_stuff() {
                 abel_coef_(0) - abel_C1_
                 ));
     abel_nu_ = bmp::lower(i_t(
-                abel_t(t_Nstar)(0) - abel_t(i_t(abel_r1_))(0)
+                abel_t(t_Nstar)(0) - abel_t(abel_r1_)(0)
                 ));
 
     // sanity checks
@@ -962,16 +1009,29 @@ void LSV<PREC>::compute_abel_stuff() {
 }
 
 
-// precompute the constant part of the error in cheb_sum,
-// except for multiplication by |A'(x)|.
+// precompute the constant part of the error in cheb_sum
 template <int PREC>
-void LSV<PREC>::compute_cheb_sum_small_const_error() {
+void LSV<PREC>::compute_sum_small_const_error() {
     const interval_t &nu = abel_nu_;
-    const real_t &vk = abel_varkappa1_;
+    const interval_t &vk = abel_varkappa1_;
 
     interval_t Lfac = 1;
     for (int ell = 1; ell <= 2 * L_ + 1; ell++)
         Lfac *= ell;
+
+    {
+        interval_t &c_eps = eps_sum_small_const_error_;
+        c_eps = 0;
+
+        const VectorXi B2 = bernoulli2k(L_);    // B2(ell) = B_{2 ell}
+
+        for (int j = 1; j <= L_; j++)
+            c_eps += abs(B2(j)) / (2 * j * pow(nu * vk, 2 * j - 1));
+
+        c_eps += Lfac * nu / (L_ * pow(2 * pi_ * nu * vk, 2 * L_ + 1));
+        c_eps /= (gamma_ * abel_am1_minus_C1_);
+    }
+
 
     interval_t E;
 
@@ -983,12 +1043,12 @@ void LSV<PREC>::compute_cheb_sum_small_const_error() {
           (exp(interval_t(M_)) - 1)
         );
 
-    E /= (gamma_ * abel_am1_minus_C1_ * pow(abel_r1_, 1 + 1 / gamma_));
+    E /= (gamma_ * abel_am1_minus_C1_);
 
     // maxima of Chebyshev polynomials in the petal Re(t) > r1
     VectorXi cheb_max_r1(N_);
     {
-        interval_t rr = 2 * pow(abel_r1_, - 1 / gamma_),
+        interval_t rr = 2 * pow(abel_r1_, - gamma_inv_),
                    tt = 1 + rr + sqrt(rr * rr + 2 * rr);
         for (int i = 0; i < N_; i++)
             cheb_max_r1(i) = (pow(tt, i) + pow(tt, -i)) / 2;
