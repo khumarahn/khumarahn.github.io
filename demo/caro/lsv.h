@@ -113,8 +113,7 @@ class LSV {
         // * min distance from the Nstar-th preimage of 1 in the t-plane to r1
         interval_t abel_nu_;
         // * misc
-        interval_t abel_delta1_,        // = C1 / sqrt(a_{-1}^2 - C1^2)
-                   abel_varkappa1_;     // = (1 + delta1^2)^{-1/2}  or  (1 - C_1^2 / a_{-1}^2)^{1/2}
+        interval_t abel_varkappa1_;     // \leq (a_{-1} - C_1) / (a_{-1} + C_1)
         // max of \kappa(w) / \kappa(w + s \zeta),
         // as used in the bound on C_\psi
         interval_t abel_max_kappa_ratio_;
@@ -223,8 +222,7 @@ class LSV {
                 << ", abel_r_good_: " << abel_r_good_ << "\n"
                 << "  abel_r1_: " << abel_r1_
                 << ", abel_C1_: " << abel_C1_ << "\n"
-                << "  abel_delta1_: " << abel_delta1_
-                << ", abel_varkappa1_: " << abel_varkappa1_ << "\n"
+                << "  abel_varkappa1_: " << abel_varkappa1_ << "\n"
                 << "  abel_am1_minus_C1_: " << abel_am1_minus_C1_ << "\n"
                 << "  L_: " << L_ << ", M_: " << M_
                 << ", abel_nu_: " << abel_nu_ << "\n\n";
@@ -890,13 +888,13 @@ void LSV<PREC>::compute_abel_stuff() {
 
     // now we can call abel_t, although the constant term is still zero
 
-    const i_t &a_m1 = abel_coef_(0);
+    const i_t &am1 = abel_coef_(0);
 
     {   // r1, C1
         // increase r1 until C1 is significantly smaller than a_{-1}
-        assert(a_m1 > 0);
-        i_t max_C1 = a_m1 / 16;
-        max_C1 = bmp::lower(a_m1);
+        assert(am1 > 0);
+        i_t max_C1 = am1 / 16;
+        max_C1 = bmp::lower(am1);
         for (abel_r1_ = abel_r_good_ + 1; ; abel_r1_ += 1) {
             abel_r1_ = bmp::upper(abel_r1_); // to be safe
             i_t iC1 = abs(abel_coef_(1)) / abel_r1_ + abel_C0_ / pow(abel_r1_ - 1, n);
@@ -909,12 +907,12 @@ void LSV<PREC>::compute_abel_stuff() {
             }
         }
 
-        i_t C1am1 = abel_C1_ / a_m1;
-        abel_delta1_    = bmp::upper(i_t(pow(pow(C1am1, -2) - 1, i_t(-1) / 2)));
-        abel_varkappa1_ = bmp::lower(i_t(pow(1 - pow(C1am1, 2), i_t(1) / 2)));
+        i_t C1am1 = abel_C1_ / am1;
+        abel_varkappa1_ = (am1 - abel_C1_) / (am1 + abel_C1_);
+        abel_varkappa1_ = bmp::lower(abel_varkappa1_);
 
         abel_am1_minus_C1_ = bmp::lower(i_t(
-                    a_m1 - abel_C1_
+                    am1 - abel_C1_
                     ));
     }
 
@@ -950,7 +948,7 @@ void LSV<PREC>::compute_abel_stuff() {
 
         // We need t \geq r_1 + \nu / (a_{-1} + C_1) for the EM
         // approximation to apply
-        i_t t_good_for_EM = abel_r1_ + abel_nu_ / (a_m1 + abel_C1_);
+        i_t t_good_for_EM = abel_r1_ + abel_nu_ / (am1 + abel_C1_);
         t_good_for_EM = bmp::upper(t_good_for_EM);
 
 
@@ -1017,7 +1015,6 @@ void LSV<PREC>::compute_abel_stuff() {
     assert( abel_r_good_ >= abel_r_ );
     assert( abel_r1_ > abel_r_good_ );
     assert( abel_C1_ > 0 );
-    assert( abel_delta1_ > 0 );
     assert( abel_varkappa1_ > 0 );
     assert( abel_am1_minus_C1_ > 0 );
     assert( abel_nu_ > 0 );
