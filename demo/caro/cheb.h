@@ -228,6 +228,21 @@ class Cheb {
             return I;
         }
 
+        // An upper bound on the sup norm in a Bernstein ellipse with parameter rho,
+        // scaled to have the foci at a and b
+        real_t ellipse_norm (const real_t &rho) const {
+            // major semi-axes
+            real_t M = (rho + 1 / rho) / 4 * (b_ - a_);
+            // left point
+            real_t x = (a_ + b_) / 2 - M;
+
+            real_t r = abs(coef(0)) / 2;
+            for (int k = 1; k < N_; k++)
+                r += abs(coef_(k)) * (pow(rho, k) + pow(rho, -k)) / 2;
+
+            return r;
+        }
+
         // discrete cosine transform type 2: eigen's kissfft
         // and a reference naive implementation
         static VectorXr kissDCT2(const VectorXr &v) {
