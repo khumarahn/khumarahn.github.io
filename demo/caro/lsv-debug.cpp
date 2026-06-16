@@ -221,6 +221,21 @@ int main() {
                 << "  h'(x) / h(x) <= - " << F1 << " / x <= - " << F1_x << ", and\n"
                 << "  h''(x) / h(x) >= " << F2 << " / x^2 >= " << F2_x << ".\n"
                 << "(would be a theorem if the numbers were rounded correctly)\n";
+
+            // sanity check
+            {
+                interval_t hd = x_star * 0.001,
+                           Hm = H(x_star - hd),
+                           H0 = H(x_star),
+                           Hp = H(x_star + hd);
+                interval_t hp = (Hp - Hm) / (2 * hd),
+                           hpp = (Hm - 2 * H0 + Hp) / (hd * hd);
+                cout << "\n\nSanity check: approximately, at x = x_star,\n"
+                    << "  h'(x) / h(x) * x : "
+                    << hp / H0 * x_star << ",\n"
+                    << "  h''(x) / h(x) * x^2 : "
+                    << hpp / H0 * pow(x_star, 2) << "\n\n";
+            }
         } // computing F1, F2
     }
 
