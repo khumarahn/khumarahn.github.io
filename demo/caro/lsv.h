@@ -48,6 +48,11 @@ class LSV {
         using real_t     = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
+        static const interval_t e_;
+        static const interval_t pi_;
+        static const real_t real_eps_;
+        static const real_t real_eps_sqrt_;
+
         template <typename var_t>
             using Vector2 = Eigen::Matrix<var_t,2,1>;
         template <typename var_t>
@@ -90,6 +95,8 @@ class LSV {
             // |\tA'(t) - a_{-1}| \leq C1 when Re(t) \geq r1,
             // with C1 significantly smaller than a_{-1}
             interval_t r1, C1, am1_minus_C1;
+            // |z^3 \hA''(z) - 2 a_{-1}| \leq C2
+            interval_t C2;
             // min distance from the Nstar-th preimage of 1 in the t-plane to r1
             interval_t nu;
             // \leq (a_{-1} - C_1) / (a_{-1} + C_1)
@@ -110,11 +117,6 @@ class LSV {
         };
 
     private:
-        static const interval_t e_;
-        static const interval_t pi_;
-        static const real_t real_eps_;
-        static const real_t real_eps_sqrt_;
-
         interval_t gamma_,
                    gamma_inv_;
 
@@ -230,7 +232,8 @@ class LSV {
                 << ", abel_.C0: " << abel_.C0
                 << ", abel_.r_good: " << abel_.r_good << "\n"
                 << "  abel_.r1: " << abel_.r1
-                << ", abel_.C1: " << abel_.C1 << "\n"
+                << ", abel_.C1: " << abel_.C1
+                << ", abel_.C2: " << abel_.C2 << "\n"
                 << "  abel_.varkappa0: " << abel_.varkappa0 << "\n"
                 << "  abel_.am1_minus_C1: " << abel_.am1_minus_C1 << "\n"
                 << "  L_: " << L_ << ", M_: " << M_
@@ -248,7 +251,7 @@ class LSV {
         interval_t gamma() const { return gamma_; };
         VectorXi abel_coef() const { return abel_.coef; };
 
-        abel_meta_t abel_meta() { return abel_; );
+        abel_meta_t abel_meta() { return abel_; };
 
         // branches
         Vector2i left(const interval_t &x) const {
@@ -447,11 +450,6 @@ class LSV {
 
             // h as a function
             meta.h = interval_cheb_t(hv, a, b);
-
-            // bound sup norm of h in an ellipse
-            auto norm_h = [h = meta.h] (interval_t rho) {
-                return bmp::upper(h.ellipse_norm(rho));
-            };
 
             // *** Now h and L are computed
 
@@ -914,6 +912,17 @@ void LSV<PREC>::compute_abel_stuff() {
                     ));
     }
 
+    {   // C2
+        abel_.C2 = 2 * abel_.C1 + abs(abel_.coef(1)) / abel_.r1;
+        for (int k = 1; k <= n; k++) {
+            abel_.C2 += k * (k + 1) * abs(abel_.coef(2 + k))
+                / pow(abel_.r1, k + 1);
+        }
+        abel_.C2 += 2 * abel_.C0 * abel_.r1 / pow(abel_.r1 - 1, n);
+
+        abel_.C2 = bmp::upper(abel_.C2);
+    }
+
     {   // L, nu, M
         assert(abel_.r1 > 0 && rho_C_ > 0 && abel_.varkappa0 > 0 && N_ > 0);
 
@@ -1019,6 +1028,7 @@ void LSV<PREC>::compute_abel_stuff() {
     assert( abel_.r_good >= abel_.r );
     assert( abel_.r1 > abel_.r_good );
     assert( abel_.C1 > 0 );
+    assert( abel_.C2 > 0 );
     assert( abel_.varkappa0 > 0 );
     assert( abel_.am1_minus_C1 > 0 );
     assert( abel_.nu > 0 );
