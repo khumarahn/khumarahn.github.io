@@ -59,7 +59,7 @@ int main() {
             //cout << "Abel coeff: " << abel_coef.transpose() << "\n";
         }
 
-        auto h_meta = lsv.h_meta();
+        const auto h_meta = lsv.h_meta();
         // Retrieve the transfer operator in interval form,
         // as an N x N matrix acting on Chebyshev polynomials on [0.5,1]
         // with the first coeff doubled as in Numerical Recipes
@@ -72,56 +72,71 @@ int main() {
         auto L_uncertainty = uncertainty(L);
         //cout << "Transfer operator retrieved, L1 uncertainty: " << L_uncertainty << " ...\n";
 
-        interval_t a = 0.5, b = 1.0;
-
-        // invariant density h
-        cheb_t h = h_meta.h;
-
-        VectorXi hv = h.coef();
-
-        //cout << "Error in Lh - h: " << (L * hv - hv).norm() << "\n";
-        //cout << "First coeff of h: \n" << hv.head(5).transpose()
-        //    << "\n";
-        //cout << "L1 uncertainty of coefficients: " << uncertainty(hv) << "\n";
-
-        auto H = [&lsv, &h_meta] (const interval_t &x) {
-            interval_t r;
-            // sum without an error
-            interval_t S = lsv.cheb_sum(x).transpose() * h_meta.h.coef();
-            S /= 2;
-            // an error
-            interval_t E = lsv.eps_sum(x, h_meta.err);
-
-            r = S + E;
-            return r;
-        };
-
-        // try computing h
-        for (interval_t x = 0.75; x > 1.0 / 1024; x /= 16) {
-            //interval_t x = interval_t(1.0 / 1024, 1.0 / 1024 + 1e-6);
-            interval_t hx = h.value(x) + interval_t(-h_meta.err, h_meta.err),
-                       Hx = H(x),
-                       Hhx = Hx - hx;
-
-            cout << "\n"
-                << "h(" << x << "):" << hx << ", width: " << bmp::width(hx)
-                << "\n"
-                << "H(" << x << "):" << Hx << ", width: " << bmp::width(Hx)
-                << "\n"
-                << "diff: " << Hhx << ", width: " << bmp::width(Hhx)
-                << "\n";
-
-        }
+        const interval_t a = 0.5, b = 1.0,
+              rho_A = h_meta.rho_A;
 
         cout << "\nrho_A: " << h_meta.rho_A
             << "\nERROR: " << h_meta.err << "\n";
 
+        // h(x) on (0,1] with error bounds
+        auto H = [&lsv, &h_meta] (const interval_t &x) -> interval_t {
+            if (bmp::lower(x) >= 0.5) {
+                return h_meta.h.value(x) + interval_t(-1, 1) * h_meta.err;
+            } else {
+                interval_t r;
+                // sum without an error
+                interval_t S = lsv.cheb_sum(x).transpose() * h_meta.h.coef();
+                // the error
+                interval_t E = lsv.eps_sum(x, h_meta.err);
+
+                r = (S + E) / 2;
+                return r;
+            }
+        };
+        // derivatives of h on [1/2,1]
+        cheb_t hp_cheb = h_meta.h.derivative(),
+               hpp_cheb = hp_cheb.derivative();
+        interval_t dist_A = (rho_A + 1 / rho_A - 2) / 8,
+                   hp_cheb_err = h_meta.err / dist_A,
+                   hpp_cheb_err = 2 * h_meta.err / pow(dist_A, 2);
+        hp_cheb_err  = bmp::upper(hp_cheb_err);
+        hpp_cheb_err = bmp::upper(hpp_cheb_err);
+        auto Hp = [&hp_cheb, &hp_cheb_err] (const interval_t &x) {
+            assert(bmp::lower(x) >= 0.5 && bmp::upper(x) <= 1);
+            return hp_cheb.value(x) + interval_t(-1,1) * hp_cheb_err;
+        };
+        auto Hpp = [&hpp_cheb, &hpp_cheb_err] (const interval_t &x) {
+            assert(bmp::lower(x) >= 0.5 && bmp::upper(x) <= 1);
+            return hpp_cheb.value(x) + interval_t(-1,1) * hpp_cheb_err;
+        };
+
+        // a sanity check for h
         {
-            cout << "\nComputing F_1, F_2:\n";
+            cout << "\nSanity check for h:\n";
+            interval_t x = 0.001,
+                       hx = H(x);
+            while (bmp::upper(x) < 0.5) {
+                auto Y = lsv.left(x);
+                interval_t hy = H((Y(0) + 1) / 2) / 2 + hx / Y(1);
+                x = Y(0);
+                hx = hy;
+            }
+            interval_t Hx = H(x);
+            cout << "  x: " << x << ", h(x) computed from infinite sum: " << hx
+                << ", h(x) from Chebyshev: " << H(x)
+                << ", diff: " << bmp::width(interval_t(Hx - hx))
+                << "\n";
+        }
+
+        interval_t x_star,
+                   h_norm_A;
+
+        {
+            cout << "\n\nComputing F_1, F_2:\n";
             const auto abel = lsv.abel_meta();
             const auto &h = h_meta.h;
 
-            interval_t h_norm_A = h.ellipse_norm(h_meta.rho_A) + h_meta.err;
+            h_norm_A = h.ellipse_norm(h_meta.rho_A) + h_meta.err;
             h_norm_A = bmp::upper(h_norm_A);
 
             // h(1/2)
@@ -164,7 +179,7 @@ int main() {
                        r_star_2 = varkappa1 * abel.nu
                            / ((abel_am1 - abel.C1) * (1 - R)),
                        r_star = max(r_star_1, r_star_2);
-            interval_t x_star = pow( interval_t(2), - 1 - gamma / 2)
+            x_star = pow( interval_t(2), - 1 - gamma / 2)
                 * pow(r_star, - 1 / gamma);
 
             cout << "  R: " << R
@@ -225,18 +240,89 @@ int main() {
             // sanity check
             {
                 interval_t hd = x_star * 0.001,
-                           Hm = H(x_star - hd),
+                           H_m = H(x_star - hd),
                            H0 = H(x_star),
-                           Hp = H(x_star + hd);
-                interval_t hp = (Hp - Hm) / (2 * hd),
-                           hpp = (Hm - 2 * H0 + Hp) / (hd * hd);
-                cout << "\n\nSanity check: approximately, at x = x_star,\n"
-                    << "  h'(x) / h(x) * x : "
+                           H_p = H(x_star + hd);
+                interval_t hp = (H_p - H_m) / (2 * hd),
+                           hpp = (H_m - 2 * H0 + H_p) / (hd * hd);
+                cout << "\nSanity check: approximately, at x = " << x_star << ",\n"
+                    << "  h'(x) / h(x) * x: "
                     << hp / H0 * x_star << ",\n"
-                    << "  h''(x) / h(x) * x^2 : "
+                    << "  h''(x) / h(x) * x^2: "
                     << hpp / H0 * pow(x_star, 2) << "\n\n";
             }
         } // computing F1, F2
+
+        {   // verifying conditions away from zero
+
+            // bounds on derivatives of h:
+            // |h^{(k)}(x)| \leq C_k x^{-\gamma - k}
+            // where C_k = \frac{k! C_0}{\eta^k}
+            interval_t C0, C1, C2, C3, C4;
+            {
+                interval_t rho_A = h_meta.rho_A,
+                           theta_C = h_meta.theta_C;
+                interval_t eta = min(sin(theta_C), (rho_A + 1 / rho_A - 2) / 4);
+                assert(0 < eta && eta < 1);
+                C0 = h_norm_A / 2 * (1 + 2 * pow(2 * (1 - eta), - gamma)
+                        * exp( (gamma + 1) * pow(2 * (1 + eta), gamma)));
+                C1 = C0 / eta;
+                C2 = C0 * 2 / pow(eta, 2);
+                C3 = C0 * 6 / pow(eta, 3);
+                C4 = C0 * 24 / pow(eta, 4);
+            }
+            interval_t sigma = 0.2;
+            interval_t x = bmp::lower(x_star),
+                       x_delta = pow(x, gamma + 1) * sigma,
+                       x_m = x - x_delta,
+                       x_p = x + x_delta;
+            x_m = bmp::lower(x_m);
+            x_p = bmp::upper(x_p);
+            interval_t h_max_p1 = C1 * pow(x - x_delta, - gamma - 1),
+                       h_max_p2 = C2 * pow(x - x_delta, - gamma - 2),
+                       h_max_p3 = C3 * pow(x - x_delta, - gamma - 3),
+                       h_max_p4 = C4 * pow(x - x_delta, - gamma - 4);
+
+            // estimate h'(x) on [x_m, x_p]
+            // using g(t) = h(t^{-1/\gamma}) / t
+            // @gemini: create a code to put here
+            // use the function H(x) to compute h(x)
+
+            interval_t H_m = H(x_m);
+            interval_t H_p = H(x_p);
+
+            interval_t t_m = pow(x_m, -gamma);
+            interval_t t_p = pow(x_p, -gamma);
+            interval_t delta = t_m - t_p;
+
+            interval_t g_m = pow(x_m, gamma) * H_m;
+            interval_t g_p = pow(x_p, gamma) * H_p;
+            interval_t S = (g_m - g_p) / delta;
+
+            interval_t M2 = pow(x_p, 2 * gamma) * (2 * C0 + (3 * gamma + 1) / pow(gamma, 2) * C1 * x_p + C2 / pow(gamma, 2) * pow(x_p, 2));
+
+            interval_t g_prime = S + interval_t(-1, 1) * delta * M2;
+
+            cout << "  t_m: " << t_m << ", delta: " << delta
+                << ", S: " << S << ", M2: " << M2
+                << ", g_prime: " << g_prime << "\n";
+
+            interval_t X(bmp::lower(x_m), bmp::upper(x_p));
+            interval_t T(bmp::lower(t_p), bmp::upper(t_m));
+
+            // h is monotone decreasing
+            interval_t H_X(bmp::lower(H_p), bmp::upper(H_m));
+            interval_t g_T = pow(X, gamma) * H_X;
+
+            interval_t x_h_prime_over_h = -gamma * (interval_t(1) + T * g_prime / g_T);
+
+            cout << "Derivative of h(x) the interval x in " << interval_t(x_m, x_p)
+                << " (width " << bmp::width(interval_t(x_m, x_p)) << ")"
+                << " is " << x_h_prime_over_h << "\n"
+                ;
+
+
+        }
     }
 
     return 0;

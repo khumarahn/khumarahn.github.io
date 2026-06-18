@@ -114,6 +114,7 @@ class LSV {
             MatrixXi L;
             interval_cheb_t h;
             interval_t err, rho_A;
+            interval_t theta_C;
         };
 
     private:
@@ -129,6 +130,8 @@ class LSV {
 
         abel_meta_t abel_;
 
+        // angle of sector S_C
+        interval_t theta_C_;
         // parameters \rho of the ellipses
         interval_t rho_A_, rho_B_, rho_C_;
 
@@ -222,7 +225,8 @@ class LSV {
                 << "  PREC_: " << PREC_
                 << ", DIGITS: " << DIGITS << "\n"
                 << "  N_: " << N_ << "\n"
-                << "  rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
+                << "  theta_C_: " << theta_C_
+                << ", rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
                 << ", rho_C_: " << rho_C_ << "\n"
                 << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio)
                 << ", rho_C_ / rho_A_: " << bmp::lower(CA_ratio) << "\n"
@@ -592,6 +596,7 @@ class LSV {
             assert(delta[n] < 0.5);
             std::cout << "  delta[" << n << "] = " << delta[n] << " < 0.5\n";
 
+            meta.theta_C = theta_C_;
             meta.rho_A = rho_A_;
 
             interval_t norm_h_A = meta.h.ellipse_norm(rho_A_);
@@ -776,10 +781,10 @@ void LSV<PREC>::compute_ellipses() {
     using i_t = interval_t;
 
     // sector
-    i_t sin_theta_C = min(
-            i_t(1),
-            i_t(bmp::lower(i_t(sin(pi_ / (2 * gamma_)))))
-            );
+    theta_C_ = min(i_t(pi_ / 2), i_t(pi_ / (2 * gamma_)));
+    theta_C_ = bmp::lower(theta_C_);
+
+    i_t sin_theta_C = sin(theta_C_);
 
     // a rho when the ellipse would touch the sector boundary
     i_t rho_max = sqrt(1 + 8 * pow(sin_theta_C, 2))
