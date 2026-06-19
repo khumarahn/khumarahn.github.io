@@ -97,7 +97,9 @@ class LSV {
             interval_t r1, C1, am1_minus_C1;
             // |z^3 \hA''(z) - 2 a_{-1}| \leq C2
             interval_t C2;
-            // min distance from the Nstar-th preimage of 1 in the t-plane to r1
+
+            // CONSTANTS FOR Euler-Maclaurin
+            // nu, a parameter for radius of circles
             interval_t nu;
             // \leq (a_{-1} - C_1) / (a_{-1} + C_1)
             interval_t varkappa0;
@@ -107,6 +109,8 @@ class LSV {
             // lower bound on the distance from the preimage of the petal (\cP_1)^{1 / \gamma} under
             // the second branch to the boundary of ellipse A
             interval_t dist_P1_to_A;
+
+            int Nstar, L, M, halfM;
         };
 
         // error and metadata for the invariant density
@@ -121,12 +125,12 @@ class LSV {
         interval_t gamma_,
                    gamma_inv_;
 
-        MatrixXi abel_matrix() const;
+        MatrixXi abel_matrix(int n) const;
         void compute_ellipses();
-        void compute_abel_stuff();
+        abel_meta_t compute_abel_stuff(int n) const;
 
         static constexpr int PREC_ = PREC;
-        int N_, Nstar_, L_, halfM_, M_;
+        int N_;
 
         abel_meta_t abel_;
 
@@ -147,25 +151,26 @@ class LSV {
 
         void compute_derivatives_cs() {
             // check that required constants are set
-            assert(halfM_ > 0 && M_ > 0 && Nstar_ > 0 && L_ > 0);
+            assert(abel_.halfM > 0 && abel_.M > 0
+                    && abel_.Nstar > 0 && abel_.L > 0);
 
             VectorXci &s = derivatives_s_;
             VectorXci &c = derivatives_c_;
 
-            s.resize(halfM_);
-            c.resize(halfM_);
+            s.resize(abel_.halfM);
+            c.resize(abel_.halfM);
 
             interval_t tau = abel_.varkappa0 * abel_.nu / e_;
 
-            const VectorXi B2 = bernoulli2k(L_);    // B2(ell) = B_{2 ell}
+            const VectorXi B2 = bernoulli2k(abel_.L);    // B2(ell) = B_{2 ell}
 
 #pragma omp parallel for schedule(dynamic)
-            for (int m = 1; m <= halfM_; m++) {
-                interval_t q = 2 * pi_ * (2 * m - 1) / interval_t(2 * M_);
+            for (int m = 1; m <= abel_.halfM; m++) {
+                interval_t q = 2 * pi_ * (2 * m - 1) / interval_t(2 * abel_.M);
                 complex_interval_t qq (0, q);
                 s(m - 1) = tau * exp(qq);
                 c(m - 1) = 0;
-                for (int ell = 1; ell <= L_; ell++) {
+                for (int ell = 1; ell <= abel_.L; ell++) {
                     interval_t w = - q * (2 * ell - 1);
                     complex_interval_t ww (0, w);
                     c(m - 1) += complex_interval_t(B2(ell))
@@ -211,8 +216,8 @@ class LSV {
                         mlogeps / log(rho_C_ / rho_A_)
                         ));
 
-            abel_.n = int(ceil(mlogeps)) * 2;
-            compute_abel_stuff();
+            int n = int(ceil(mlogeps)) * 2;
+            abel_ = compute_abel_stuff(n);
 
             compute_derivatives_cs();
             compute_sum_small_const_error();
@@ -230,19 +235,21 @@ class LSV {
                 << ", rho_C_: " << rho_C_ << "\n"
                 << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio)
                 << ", rho_C_ / rho_A_: " << bmp::lower(CA_ratio) << "\n"
-                << "  Nstar_: " << Nstar_ << "\n"
-                << "  abel_.n: " << abel_.n << "\n"
-                << "  abel_.r: " << abel_.r
-                << ", abel_.C0: " << abel_.C0
-                << ", abel_.r_good: " << abel_.r_good << "\n"
-                << "  abel_.r1: " << abel_.r1
-                << ", abel_.C1: " << abel_.C1
-                << ", abel_.C2: " << abel_.C2 << "\n"
-                << "  abel_.varkappa0: " << abel_.varkappa0 << "\n"
-                << "  abel_.am1_minus_C1: " << abel_.am1_minus_C1 << "\n"
-                << "  L_: " << L_ << ", M_: " << M_
-                << ", abel_.nu: " << abel_.nu << "\n"
-                << "  abel_.dist_P1_to_A: " << abel_.dist_P1_to_A << "\n\n";
+                << "  abel_:\n"
+                << "  .coef: " << abel_.coef(0) << ", " << abel_.coef(1) << ", " << abel_.coef(2) << " ...\n"
+                << "    .n: " << abel_.n << "\n"
+                << "    .r: " << abel_.r
+                << ", .C0: " << abel_.C0
+                << ", .r_good: " << abel_.r_good << "\n"
+                << "    .r1: " << abel_.r1
+                << ", .C1: " << abel_.C1
+                << ", .C2: " << abel_.C2 << "\n"
+                << "    .varkappa0: " << abel_.varkappa0 << "\n"
+                << "    .am1_minus_C1: " << abel_.am1_minus_C1
+                << ", .dist_P1_to_A: " << abel_.dist_P1_to_A << "\n"
+                << "    .L: " << abel_.L << ", abel_.M: " << abel_.M << "\n"
+                << "  .nu: " << abel_.nu
+                << ", .Nstar: " << abel_.Nstar << "\n\n";
 
             return;
         }
@@ -330,7 +337,7 @@ class LSV {
                     const VectorXci &c = derivatives_c_;
 
                     VectorXi der = VectorXi::Zero(N_);
-                    for (int m = 1; m <= halfM_; m++) {
+                    for (int m = 1; m <= abel_.halfM; m++) {
 //std::cout << __LINE__
 //    << " x: " << x << ", width: " << bmp::width(x)
 //    << " Ax(0): " << Ax(0) << ", width: " << bmp::width(Ax(0))
@@ -339,7 +346,7 @@ class LSV {
                         der += ( c(m-1) * phi(xm_inv(0)) * xm_inv(1) ).real();
                     }
 
-                    der *= - 2 * Ax(1) / M_;
+                    der *= - 2 * Ax(1) / abel_.M;
                     r += der;
                 }
 
@@ -352,7 +359,7 @@ class LSV {
                        inv_Jk = 1;
 
             // add branches naively up to Nstar
-            for (int k = 0; k < Nstar_; k++) {
+            for (int k = 0; k < abel_.Nstar; k++) {
                 r += phi(xk) * inv_Jk;
                 Vector2i y = left_inv(xk);
                 xk = y(0);
@@ -373,7 +380,7 @@ class LSV {
                        inv_Jk = 1;
 
             // add branches naively up to Nstar
-            for (int k = 0; k < Nstar_; k++) {
+            for (int k = 0; k < abel_.Nstar; k++) {
                 r += inv_Jk;
                 Vector2i y = left_inv(xk);
                 xk = y(0);
@@ -623,7 +630,8 @@ class LSV {
             (type_one_of<var_t, real_t, complex_t> && type_one_of<coef_t, VectorXr>) ||
             (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>)
         Vector2<var_t> abel_t_sum(const var_t &t, const coef_t &coef) const {
-            assert(coef.size() == abel_.n + 3);
+            assert(coef.size() > 3);
+            int n = coef.size() - 3;
             var_t A = coef(0) * t + coef(1) * log(t) + coef(2),
                   dA = coef(0) + coef(1) / t;
 
@@ -632,7 +640,7 @@ class LSV {
             var_t A_tail(0), dA_tail(0);
 
             // Horner's method
-            for (int j = abel_.n; j >= 1; j--) {
+            for (int j = n; j >= 1; j--) {
                 A_tail = coef(2 + j) + ti * A_tail;
                 dA_tail = var_t(j) * coef(2 + j) + ti * dA_tail;
             }
@@ -813,30 +821,32 @@ void LSV<PREC>::compute_ellipses() {
 }
 
 template <int PREC>
-void LSV<PREC>::compute_abel_stuff() {
+LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
+    abel_meta_t abel;
+
     using r_t = real_t;
     using i_t = interval_t;
 
-    const int n = abel_.n;
     assert(n > 0);
+    abel.n = n;
 
-    abel_.coef.resize(n + 3);
-    abel_.coef_ni.resize(n + 3);
+    abel.coef.resize(n + 3);
+    abel.coef_ni.resize(n + 3);
 
     assert(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_);
 
     {   // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
-        VectorXi b = VectorXi::Zero(abel_.n + 2);
+        VectorXi b = VectorXi::Zero(abel.n + 2);
         b(0) = -1;
 
-        MatrixXi A = abel_matrix(); // lower triangular
+        MatrixXi A = abel_matrix(n); // lower triangular
 
         // brute force solve lower triangular matrix
         // instead of using Eigen that can fail in interval arithmetic:
-        //VectorXi x = abel_matrix().template triangularView<Eigen::Lower>().solve(b);
+        //VectorXi x = abel_matrix(n).template triangularView<Eigen::Lower>().solve(b);
         //VectorXi x = interval_root_ns::linear_krawczyk(A, b);
 
-        VectorXi xx(abel_.n + 2);
+        VectorXi xx(abel.n + 2);
         for (int k = 0; k < n + 2; k++) {
             i_t s = 0;
             for (int j = 0; j < k; j++) {
@@ -845,11 +855,11 @@ void LSV<PREC>::compute_abel_stuff() {
             xx(k) = (b(k) - s) / A(k,k);
         }
 
-        abel_.coef(0) = xx(0);
-        abel_.coef(1) = xx(1);
-        abel_.coef(2) = 0;
+        abel.coef(0) = xx(0);
+        abel.coef(1) = xx(1);
+        abel.coef(2) = 0;
         for (int j = 2; j <= n + 1; j++) {
-            abel_.coef(j + 1) = xx(j);
+            abel.coef(j + 1) = xx(j);
         }
     }
 
@@ -859,16 +869,16 @@ void LSV<PREC>::compute_abel_stuff() {
 
         i_t r_m1 = b / q,
             r_m2 = 2 * b * (gamma_ + 1) * (pow(1 - q, -gamma_) - 1) / (gamma_ * q);
-        abel_.r = max(bmp::upper(r_m1), bmp::upper(r_m2));
+        abel.r = max(bmp::upper(r_m1), bmp::upper(r_m2));
 
-        i_t R = (1 / abel_.r + 1 / b) / 2,
+        i_t R = (1 / abel.r + 1 / b) / 2,
             bR = b * R;
 
         i_t B = 1
-            + abs(abel_.coef(0)) / R * (pow(1 - bR, -gamma_) + 1)
-            - abs(abel_.coef(1)) * gamma_ * log(1 - bR);
+            + abs(abel.coef(0)) / R * (pow(1 - bR, -gamma_) + 1)
+            - abs(abel.coef(1)) * gamma_ * log(1 - bR);
         for (int k = 1; k <= n; k++) {
-            B += abs(abel_.coef(2 + k)) * pow(R, k) * (pow(1 + bR, k * gamma_) + 1);
+            B += abs(abel.coef(2 + k)) * pow(R, k) * (pow(1 + bR, k * gamma_) + 1);
         }
 
         i_t M = B / pow(R, n + 1);
@@ -876,123 +886,124 @@ void LSV<PREC>::compute_abel_stuff() {
         i_t I = sqrt(pi_) / 2
             * bmp::tgamma(i_t(n) / 2) / bmp::tgamma(i_t(n + 1) / 2);
 
-        abel_.C0 = bmp::upper(pow(i_t(2), n + 1) * M * I / (gamma_ * b));
+        abel.C0 = bmp::upper(pow(i_t(2), n + 1) * M * I / (gamma_ * b));
     }
 
     {   // find a "good" value of r, for which  C0 / (r-1)^n is small
         i_t accuracy = pow(i_t(2), - PREC_) * pow(rho_C_, - N_)
             * pow(1 + i_t(1) / 16, - N_);
-        abel_.r_good = 1 + bmp::upper(pow(abel_.C0 / accuracy, i_t(1) / i_t(n)));
+        abel.r_good = 1 + bmp::upper(pow(abel.C0 / accuracy, i_t(1) / i_t(n)));
 
-        abel_.r_good = max(abel_.r_good, abel_.r + r_t(1));
+        abel.r_good = max(abel.r_good, abel.r + r_t(1));
     }
 
-    // now we can call abel_t, although the constant term is still zero
+    // now we can call abel_t_sum(*, abel.coef),
+    // although the constant term is still zero
 
-    const i_t &am1 = abel_.coef(0);
+    const i_t &am1 = abel.coef(0);
 
     {   // r1, C1
         // increase r1 until C1 is significantly smaller than a_{-1}
         assert(am1 > 0);
         i_t max_C1 = am1 / 16;
         max_C1 = bmp::lower(am1);
-        for (abel_.r1 = abel_.r_good + 1; ; abel_.r1 += 1) {
-            abel_.r1 = bmp::upper(abel_.r1); // to be safe
-            i_t iC1 = abs(abel_.coef(1)) / abel_.r1 + abel_.C0 / pow(abel_.r1 - 1, n);
+        for (abel.r1 = abel.r_good + 1; ; abel.r1 += 1) {
+            abel.r1 = bmp::upper(abel.r1); // to be safe
+            i_t iC1 = abs(abel.coef(1)) / abel.r1 + abel.C0 / pow(abel.r1 - 1, n);
             for (int k = 1; k <= n; k++)
-                iC1 += k * abs(abel_.coef(2 + k)) / pow(abel_.r1, k + 1);
+                iC1 += k * abs(abel.coef(2 + k)) / pow(abel.r1, k + 1);
 
             if (bmp::upper(iC1) < max_C1) {
-                abel_.C1 = bmp::upper(iC1);
+                abel.C1 = bmp::upper(iC1);
                 break;
             }
         }
 
-        i_t C1am1 = abel_.C1 / am1;
-        abel_.varkappa0 = (am1 - abel_.C1) / (am1 + abel_.C1);
-        abel_.varkappa0 = bmp::lower(abel_.varkappa0);
+        i_t C1am1 = abel.C1 / am1;
+        abel.varkappa0 = (am1 - abel.C1) / (am1 + abel.C1);
+        abel.varkappa0 = bmp::lower(abel.varkappa0);
 
-        abel_.am1_minus_C1 = bmp::lower(i_t(
-                    am1 - abel_.C1
+        abel.am1_minus_C1 = bmp::lower(i_t(
+                    am1 - abel.C1
                     ));
     }
 
     {   // C2
-        abel_.C2 = 2 * abel_.C1 + abs(abel_.coef(1)) / abel_.r1;
+        abel.C2 = 2 * abel.C1 + abs(abel.coef(1)) / abel.r1;
         for (int k = 1; k <= n; k++) {
-            abel_.C2 += k * (k + 1) * abs(abel_.coef(2 + k))
-                / pow(abel_.r1, k + 1);
+            abel.C2 += k * (k + 1) * abs(abel.coef(2 + k))
+                / pow(abel.r1, k + 1);
         }
-        abel_.C2 += 2 * abel_.C0 * abel_.r1 / pow(abel_.r1 - 1, n);
+        abel.C2 += 2 * abel.C0 * abel.r1 / pow(abel.r1 - 1, n);
 
-        abel_.C2 = bmp::upper(abel_.C2);
+        abel.C2 = bmp::upper(abel.C2);
     }
 
     {   // L, nu, M
-        assert(abel_.r1 > 0 && rho_C_ > 0 && abel_.varkappa0 > 0 && N_ > 0);
+        assert(abel.r1 > 0 && rho_C_ > 0 && abel.varkappa0 > 0 && N_ > 0);
 
         // exponential factor which should be outweighed by
         // L / (pi e nu varkappa_1)
-        i_t x = 2 * pow(abel_.r1, - gamma_inv_),
+        i_t x = 2 * pow(abel.r1, - gamma_inv_),
             G = rho_C_ * (1 + x + sqrt(x * x + 2 * x)),
             fatty = pow(i_t(2), PREC_) * pow(G, N_);
 
         i_t L_nu_factor = 24 + PREC_ / 16;
         i_t L =  log(fatty) / (2 * log(L_nu_factor));
-        i_t nu = L_nu_factor * L / (e_ * pi_ * abel_.varkappa0);
+        i_t nu = L_nu_factor * L / (e_ * pi_ * abel.varkappa0);
 
-        L_ = int(ceil(bmp::upper(L)));
-        abel_.nu = bmp::upper(nu);
+        abel.L = int(ceil(bmp::upper(L)));
+        abel.nu = bmp::upper(nu);
 
         // M is the number of points on the circle
-        halfM_ = int(ceil(bmp::upper(i_t(
+        abel.halfM = int(ceil(bmp::upper(i_t(
                         log(fatty) / 2
                         ))));
-        if (halfM_ < L_)
-            halfM_ = L_;
-        M_ = 2 * halfM_;
+        if (abel.halfM < abel.L)
+            abel.halfM = abel.L;
+        abel.M = 2 * abel.halfM;
     }
 
     i_t t_Nstar;
     {   // Nstar
-        // (instead of Caroline's Nstar_ = int(ceil(nu + mlogeps_)),
+        // (instead of Caroline's Nstar = int(ceil(nu + mlogeps_)),
         // we slowly increase Nstar until the constraints are satisfied)
 
         // We need t \geq r_1 + \nu / (a_{-1} + C_1) for the EM
         // approximation to apply
-        i_t t_good_for_EM = abel_.r1 + abel_.nu / (am1 + abel_.C1);
+        i_t t_good_for_EM = abel.r1 + abel.nu / (am1 + abel.C1);
         t_good_for_EM = bmp::upper(t_good_for_EM);
 
 
         // max error factor in C_\psi, we just choose
-        abel_.max_kappa_ratio = 8;
+        abel.max_kappa_ratio = 8;
 
         // compute the minimal t for which this factor works,
         i_t t_good_for_kappa;
         {
-            i_t C = abel_.varkappa0 * abel_.nu / abel_.am1_minus_C1,
-                D = 1 + 2 * abel_.C1 / abel_.am1_minus_C1,
-                E = pow(abel_.max_kappa_ratio / D, gamma_ / (gamma_ + 1));
+            i_t C = abel.varkappa0 * abel.nu / abel.am1_minus_C1,
+                D = 1 + 2 * abel.C1 / abel.am1_minus_C1,
+                E = pow(abel.max_kappa_ratio / D, gamma_ / (gamma_ + 1));
             assert(E > 1);
 
             t_good_for_kappa = C / (E - 1);
             t_good_for_kappa = bmp::upper(t_good_for_kappa);
         }
 
-        i_t t_good = max(max(abel_.r_good, t_good_for_kappa), t_good_for_EM);
+        i_t t_good = max(max(abel.r_good, t_good_for_kappa), t_good_for_EM);
 
-        i_t Ar1 = abel_t(abel_.r1)(0);
+        i_t Ar1 = abel_t_sum(abel.r1, abel.coef)(0);
         i_t x = 1, t = 1;
 
-        for (Nstar_ = 1; ; Nstar_++) {
+        for (abel.Nstar = 1; ; abel.Nstar++) {
             x = left_inv(x)(0);
             t = pow(x, -gamma_);
 
             if (bmp::lower(t) > t_good) {
                 r_t min_At = bmp::upper(i_t(
-                        Ar1 + abel_.nu
+                        Ar1 + abel.nu + 1
                         ));
-                r_t At = bmp::lower(abel_t(t)(0));
+                r_t At = bmp::lower(abel_t_sum(t, abel.coef)(0));
                 if (At > min_At) {
                     t_Nstar = t;
                     break;
@@ -1004,44 +1015,45 @@ void LSV<PREC>::compute_abel_stuff() {
     {   // Now set the constant term so that A(1) is approximately 0.
         // Not trying to control the accuracy
         i_t x = 1;
-        for (int i=0; i<Nstar_; i++) {
+        for (int i=0; i<abel.Nstar; i++) {
             x = left_inv(x)(0);
         }
 
         i_t t = pow(x, -gamma_);
 
-        // now, we should have A(t) = Nstar_
-        abel_.coef(2) = 0;
-        abel_.coef(2) = Nstar_ - bmp::median(abel_t(t)(0));
+        // now, we should have A(t) = Nstar
+        abel.coef(2) = 0;
+        abel.coef(2) = abel.Nstar - bmp::median(abel_t_sum(t, abel.coef)(0));
     }
 
     // populate the non-interval coefficients
-    for (int k = 0; k <= abel_.n + 2; k++)
-        abel_.coef_ni(k) = bmp::median(abel_.coef(k));
+    for (int k = 0; k <= abel.n + 2; k++)
+        abel.coef_ni(k) = bmp::median(abel.coef(k));
 
     // bound the distance from the preimage of the petal (\cP_1)^{1 / \gamma} under
     // the second branch to the boundary of ellipse A
-    abel_.dist_P1_to_A = (rho_A_ + 1 / rho_A_) / 8 - i_t(1) / 4 - pow(abel_.r1, - gamma_inv_) / 2;
-    abel_.dist_P1_to_A = bmp::lower(abel_.dist_P1_to_A);
-    assert(abel_.dist_P1_to_A > 0);
+    abel.dist_P1_to_A = (rho_A_ + 1 / rho_A_) / 8 - i_t(1) / 4 - pow(abel.r1, - gamma_inv_) / 2;
+    abel.dist_P1_to_A = bmp::lower(abel.dist_P1_to_A);
+    assert(abel.dist_P1_to_A > 0);
 
     // sanity checks
     assert( rho_A_ > 0 && rho_B_ > 0 && rho_C_ > 0 );
-    assert( abel_.r > 0 );
-    assert( abel_.C0 > 0 );
-    assert( abel_.r_good > 0 );
-    assert( abel_.r_good >= abel_.r );
-    assert( abel_.r1 > abel_.r_good );
-    assert( abel_.C1 > 0 );
-    assert( abel_.C2 > 0 );
-    assert( abel_.varkappa0 > 0 );
-    assert( abel_.am1_minus_C1 > 0 );
-    assert( abel_.nu > 0 );
-    assert( L_ > 0 && halfM_ >= L_ && M_ == 2 * halfM_);
+    assert( abel.r > 0 );
+    assert( abel.C0 > 0 );
+    assert( abel.r_good > 0 );
+    assert( abel.r_good >= abel.r );
+    assert( abel.r1 > abel.r_good );
+    assert( abel.C1 > 0 );
+    assert( abel.C2 > 0 );
+    assert( abel.varkappa0 > 0 );
+    assert( abel.am1_minus_C1 > 0 );
+    assert( abel.nu > 0 );
+    assert( abel.L > 0 && abel.halfM >= abel.L
+            && abel.M == 2 * abel.halfM);
 
-    assert(2 * pi_ * e_ * abel_.nu * abel_.varkappa0 > 2 * L_ - 1);
+    assert(2 * pi_ * e_ * abel.nu * abel.varkappa0 > 2 * abel.L - 1);
 
-    return;
+    return abel;
 }
 
 // precompute the constant part of the error in cheb_sum
@@ -1051,20 +1063,21 @@ void LSV<PREC>::compute_sum_small_const_error() {
     const interval_t &vk = abel_.varkappa0;
 
     interval_t Lfac = 1;
-    for (int ell = 1; ell <= 2 * L_ + 1; ell++)
+    for (int ell = 1; ell <= 2 * abel_.L + 1; ell++)
         Lfac *= ell;
 
     // R_L term without C_\psi
-    interval_t R_L = Lfac * nu / (L_ * pow(2 * pi_ * nu * vk, 2 * L_ + 1));
+    interval_t R_L = Lfac * nu
+        / (abel_.L * pow(2 * pi_ * nu * vk, 2 * abel_.L + 1));
 
     // small observables
     {
         interval_t &c_eps = eps_sum_small_const_error_;
         c_eps = R_L;
 
-        const VectorXi B2 = bernoulli2k(L_);    // B2(ell) = B_{2 ell}
+        const VectorXi B2 = bernoulli2k(abel_.L);    // B2(ell) = B_{2 ell}
 
-        for (int j = 1; j <= L_; j++)
+        for (int j = 1; j <= abel_.L; j++)
             c_eps += abs(B2(j)) / (2 * j * pow(nu * vk, 2 * j - 1));
 
         // kappa factor of C_\psi
@@ -1077,8 +1090,8 @@ void LSV<PREC>::compute_sum_small_const_error() {
     // error in D_L without C_\psi
     E += pi_ * pi_ * e_ * nu * vk /
         ( 3 *
-          (pow((2 * pi_ * e_ * nu * vk) / (2 * L_ - 1), 2) - 1) *
-          (exp(interval_t(M_)) - 1)
+          (pow((2 * pi_ * e_ * nu * vk) / (2 * abel_.L - 1), 2) - 1) *
+          (exp(interval_t(abel_.M)) - 1)
         );
 
     // kappa factor of C_\psi
@@ -1107,28 +1120,28 @@ void LSV<PREC>::compute_sum_small_const_error() {
 }
 
 template <int PREC>
-LSV<PREC>::MatrixXi LSV<PREC>::abel_matrix() const {
+LSV<PREC>::MatrixXi LSV<PREC>::abel_matrix(int n) const {
     // X is a KAbel+1 by KAbel+1 matrix where the columns contain coefficients at 1, 1/t, 1/t^2, ... for:
     // * first column: coefficients of t(left(z))
     // * second column: coefficients of log(t(left(z)))
     // * 2+n column: coefficients of t(left(z))^{-k} - t^{-k}
-    MatrixXi X = MatrixXi::Zero(abel_.n + 2, abel_.n + 2);
+    MatrixXi X = MatrixXi::Zero(n + 2, n + 2);
     const interval_t g = gamma_, b = pow(2, g);
     interval_t c;
 
     c = - g * b;
-    for (int j = 0; j <= abel_.n + 1; j++) {
+    for (int j = 0; j <= n + 1; j++) {
         X(j,0) = c;
         c *= b * (-g - j - 1) / (j + 2);
     }
     c = - g * b;
-    for (int j = 1; j <= abel_.n + 1; j++) {
+    for (int j = 1; j <= n + 1; j++) {
         X(j,1) = c / j;
         c *= -b;
     }
-    for (int k = 1; k <= abel_.n; k++) {
+    for (int k = 1; k <= n; k++) {
         c = 1;
-        for (int j = k + 1; j <= abel_.n + 1; j++) {
+        for (int j = k + 1; j <= n + 1; j++) {
             c *= (k * g - j + k + 1) * b / (j - k);
             X(j, k+1) = c;
         }

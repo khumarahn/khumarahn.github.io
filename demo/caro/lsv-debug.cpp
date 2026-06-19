@@ -12,23 +12,35 @@ const int PREC = 48;   // in bits
 
 namespace bmp = boost::multiprecision;
 
+using LSV = lsv_ns::LSV<PREC>;
+
+// real and interval types
+using real_t = LSV::real_t;
+using interval_t = LSV::interval_t;
+//using complex_interval_t = LSV::complex_interval_t;
+
+// Matrix and vector types in interval arithmetic
+using MatrixXi = LSV::MatrixXi;
+//using MatrixXix = LSV::MatrixXix;
+//using MatrixXr = LSV::MatrixXr;
+using VectorXi = LSV::VectorXi;
+//using Vector2ci = LSV::Vector2ci;
+
+const real_t real_eps = std::numeric_limits<real_t>::epsilon();
+
+// Bounds f'(x) on [x1, x2]
+// m2 is the bound on |f''| over the interval
+interval_t derivative_range(const interval_t& x1, const interval_t& x2,
+        const interval_t& y1, const interval_t& y2,
+        const interval_t& m2);
+
+// Bounds f''(x) on [x1, x3] (assuming x1 < x2 < x3)
+// m3 is the bound on |f'''| over the interval
+interval_t second_derivative_range(const interval_t& x1, const interval_t& x2, const interval_t& x3,
+        const interval_t& y1, const interval_t& y2, const interval_t& y3,
+        const interval_t& m3);
+
 int main() {
-    using LSV = lsv_ns::LSV<PREC>;
-
-    // real and interval types
-    using real_t = LSV::real_t;
-    using interval_t = LSV::interval_t;
-    //using complex_interval_t = LSV::complex_interval_t;
-
-    // Matrix and vector types in interval arithmetic
-    using MatrixXi = LSV::MatrixXi;
-    //using MatrixXix = LSV::MatrixXix;
-    //using MatrixXr = LSV::MatrixXr;
-    using VectorXi = LSV::VectorXi;
-    //using Vector2ci = LSV::Vector2ci;
-
-    const real_t real_eps = std::numeric_limits<real_t>::epsilon();
-
     using std::cout;
 
     // Chebyshev interpolation class in interval arithmetic
@@ -123,7 +135,7 @@ int main() {
             }
             interval_t Hx = H(x);
             cout << "  x: " << x << ", h(x) computed from infinite sum: " << hx
-                << ", h(x) from Chebyshev: " << H(x)
+                << "  h(x) from Chebyshev: " << H(x)
                 << ", diff: " << bmp::width(interval_t(Hx - hx))
                 << "\n";
         }
@@ -145,8 +157,8 @@ int main() {
             cout << "  h(1/2): " << h_half
                 << ", width: " << bmp::width(h_half) << "\n";
 
-            interval_t delta_star = abel.dist_P1_to_A;
-            cout << "  delta_star: " << delta_star << "\n";
+            interval_t delta_hash = abel.dist_P1_to_A;
+            cout << "  delta_hash: " << delta_hash << "\n";
 
             interval_t h_prime_hash;
             {
@@ -157,11 +169,11 @@ int main() {
                 cheb_t h0(h0_coef, h.a(), h.b());
 
                 h_prime_hash = (h0.ellipse_norm(h_meta.rho_A) + h_meta.err)
-                    / delta_star;
+                    / delta_hash;
                 h_prime_hash = bmp::upper(h_prime_hash);
             }
             cout << "  bound on sup norm of h in A: " << h_norm_A
-                << ", and h' delta_star-inside A: " << h_prime_hash << "\n";
+                << ", and h' delta_hash-inside A: " << h_prime_hash << "\n";
 
             interval_t abel_am1 = abel.coef(0);
             interval_t varkappa1 = abel.varkappa0
@@ -179,7 +191,7 @@ int main() {
                        r_star_2 = varkappa1 * abel.nu
                            / ((abel_am1 - abel.C1) * (1 - R)),
                        r_star = max(r_star_1, r_star_2);
-            x_star = pow( interval_t(2), - 1 - gamma / 2)
+            x_star = pow(interval_t(2), - 1 - 1 / (2 * gamma))
                 * pow(r_star, - 1 / gamma);
 
             cout << "  R: " << R
@@ -225,6 +237,8 @@ int main() {
                 F2 = bmp::lower(F2);
             }
 
+            assert(F1 > 0 && F2 > 0);
+
             cout << "  F1: " << F1 << ", F2: " << F2 << "\n";
             interval_t F1_x = F1 / x_star,
                        F2_x = F2 / pow(x_star, 2);
@@ -245,7 +259,7 @@ int main() {
                            H_p = H(x_star + hd);
                 interval_t hp = (H_p - H_m) / (2 * hd),
                            hpp = (H_m - 2 * H0 + H_p) / (hd * hd);
-                cout << "\nSanity check: approximately, at x = " << x_star << ",\n"
+                cout << "\nTheorem sanity check: approximately, at x = " << x_star << ",\n"
                     << "  h'(x) / h(x) * x: "
                     << hp / H0 * x_star << ",\n"
                     << "  h''(x) / h(x) * x^2: "
@@ -271,59 +285,102 @@ int main() {
                 C3 = C0 * 6 / pow(eta, 3);
                 C4 = C0 * 24 / pow(eta, 4);
             }
-            interval_t sigma = 0.2;
-            interval_t x = bmp::lower(x_star),
-                       x_delta = pow(x, gamma + 1) * sigma,
-                       x_m = x - x_delta,
-                       x_p = x + x_delta;
-            x_m = bmp::lower(x_m);
-            x_p = bmp::upper(x_p);
-            interval_t h_max_p1 = C1 * pow(x - x_delta, - gamma - 1),
-                       h_max_p2 = C2 * pow(x - x_delta, - gamma - 2),
-                       h_max_p3 = C3 * pow(x - x_delta, - gamma - 3),
-                       h_max_p4 = C4 * pow(x - x_delta, - gamma - 4);
+            interval_t sigma = 0.0002;
+            interval_t x = bmp::lower(x_star);
 
-            // estimate h'(x) on [x_m, x_p]
-            // using g(t) = h(t^{-1/\gamma}) / t
-            // @gemini: create a code to put here
-            // use the function H(x) to compute h(x)
+            auto T = [&gamma] (const interval_t &x) -> interval_t {
+                return pow(x, - gamma);
+            };
+            auto T_inv = [&gamma] (const interval_t &t) -> interval_t {
+                return pow(t, - 1 / gamma);
+            };
+            auto g = [&T_inv, &H] (const interval_t &t) -> interval_t {
+                return H(T_inv(t)) / t;
+            };
 
-            interval_t H_m = H(x_m);
-            interval_t H_p = H(x_p);
+            interval_t t2 = T(x),
+                       t1 = t2 - 0.0002,
+                       t3 = t2 + 0.0002;
+            interval_t g1 = g(t1),
+                       g2 = g(t2),
+                       g3 = g(t3);
 
-            interval_t t_m = pow(x_m, -gamma);
-            interval_t t_p = pow(x_p, -gamma);
-            interval_t delta = t_m - t_p;
+            // |g''(t)| \leq K2 t^{-4}
+            interval_t K2 = 2 * C0 + (3 * gamma + 1) / pow(gamma, 2) * C1
+                + pow(gamma, -2) * C2;
 
-            interval_t g_m = pow(x_m, gamma) * H_m;
-            interval_t g_p = pow(x_p, gamma) * H_p;
-            interval_t S = (g_m - g_p) / delta;
+            // |g'''(t)| \leq K3 t^{-5}
+            interval_t K3 = 6 * C0
+                + (11 * pow(gamma, 2) + 6 * gamma + 1) * pow(gamma, -3) * C1
+                + (6 * gamma + 3) * pow(gamma, -3) * C2
+                + pow(gamma, -3) * C3;
 
-            interval_t M2 = pow(x_p, 2 * gamma) * (2 * C0 + (3 * gamma + 1) / pow(gamma, 2) * C1 * x_p + C2 / pow(gamma, 2) * pow(x_p, 2));
+            interval_t gp2_max = K2 * pow(t1, -2),
+                       gp3_max = K3 * pow(t1, -3);
+            gp2_max = bmp::upper(gp2_max);
+            gp3_max = bmp::upper(gp3_max);
 
-            interval_t g_prime = S + interval_t(-1, 1) * delta * M2;
+            // estimate g'(t), g''(t) on [t1, t3]
+            interval_t gp = derivative_range(t1, t3, g1, g3, gp2_max);
+            interval_t gpp = second_derivative_range(t1, t2, t3, g1, g2, g3, gp3_max);
 
-            cout << "  t_m: " << t_m << ", delta: " << delta
-                << ", S: " << S << ", M2: " << M2
-                << ", g_prime: " << g_prime << "\n";
+            cout << "C0: " << C0 << ", C1: " << C1 << ", C2: " << C2 << ", C3: " << C3 << "\n"
+                << "gp2_max: " << gp2_max << ", gp3_max: " << gp3_max << "\n";
 
-            interval_t X(bmp::lower(x_m), bmp::upper(x_p));
-            interval_t T(bmp::lower(t_p), bmp::upper(t_m));
+            cout << "t2: " << t2 << ", width of g': " << bmp::width(gp)
+                << ", g2: " << g2 << "\n";
 
-            // h is monotone decreasing
-            interval_t H_X(bmp::lower(H_p), bmp::upper(H_m));
-            interval_t g_T = pow(X, gamma) * H_X;
+            cout << "Derivatives at t: " << t2 << ", t3 - t1: " << t3 - t1 << "\n"
+                << " t2 g'(t1, t3) / g(t2): " << t2 * gp / g2 << "\n"
+                << " t2^2 g''(t1, t3) / g(t2): " << t2*t2 * gpp / g2 << "\n"
+                << "\n";
 
-            interval_t x_h_prime_over_h = -gamma * (interval_t(1) + T * g_prime / g_T);
-
-            cout << "Derivative of h(x) the interval x in " << interval_t(x_m, x_p)
-                << " (width " << bmp::width(interval_t(x_m, x_p)) << ")"
-                << " is " << x_h_prime_over_h << "\n"
-                ;
-
-
+            // estimate h'(x), h''(x)
+            interval_t xhph = - gamma * (1 + t2 * gp / g2),
+                       xxhpph = gamma * ( (gamma + 1) + (3 * gamma + 1) * t2 * gp / g2
+                               + pow(gamma * t2, 2) * gpp / g2);
+            cout << "Derivatives at x: " << x << ", x3 - x1: " << T_inv(t3) - T_inv(t1) << "\n"
+                << " x h'(x1, x3) / h(x2): " << xhph << "\n"
+                << " x^2 h''(x1, x3) / h(x2): " << xxhpph << "\n"
+                << "\n";
         }
     }
 
     return 0;
+}
+
+interval_t derivative_range(const interval_t& x1, const interval_t& x2,
+        const interval_t& y1, const interval_t& y2,
+        const interval_t& m2) {
+
+    interval_t dx = x2 - x1;
+    interval_t mean_slope = (y2 - y1) / dx;
+
+    // The maximum deviation of f'(x) from f'(c) on [x1, x2] is m2 * dx
+    interval_t max_dev = m2 * dx;
+    max_dev = bmp::upper(max_dev);
+    interval_t error_term(-max_dev, max_dev);
+
+    return mean_slope + error_term;
+}
+
+interval_t second_derivative_range(const interval_t& x1, const interval_t& x2, const interval_t& x3,
+        const interval_t& y1, const interval_t& y2, const interval_t& y3,
+        const interval_t& m3) {
+
+    interval_t dx12 = x2 - x1;
+    interval_t dx23 = x3 - x2;
+    interval_t dx13 = x3 - x1;
+
+    interval_t slope12 = (y2 - y1) / dx12;
+    interval_t slope23 = (y3 - y2) / dx23;
+
+    // Using divided differences, f''(c) = 2 * f[x1, x2, x3]
+    interval_t mean_second_deriv = interval_t(2) * (slope23 - slope12) / dx13;
+
+    interval_t max_dev = m3 * dx13;
+    max_dev = bmp::upper(max_dev);
+    interval_t error_term(-max_dev, max_dev);
+
+    return mean_second_deriv + error_term;
 }
