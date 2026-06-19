@@ -884,21 +884,19 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     }
 
     {   // compute r, C0
-        i_t q = i_t(1) / 2,
-            b = pow(2, gamma_);
+        i_t b = pow(2, gamma_);
 
-        i_t r_m1 = b / q,
-            r_m2 = 2 * b * (gamma_ + 1) * (pow(1 - q, -gamma_) - 1) / (gamma_ * q);
-        abel.r = max(bmp::upper(r_m1), bmp::upper(r_m2));
+        abel.r = b * (gamma_ + 1);
 
         i_t R = (1 / abel.r + 1 / b) / 2,
             bR = b * R;
 
         i_t B = 1
-            + abs(abel.coef(0)) / R * (pow(1 - bR, -gamma_) + 1)
+            + abs(abel.coef(0)) / R * (pow(1 - bR, -gamma_) - 1)
             - abs(abel.coef(1)) * gamma_ * log(1 - bR);
         for (int k = 1; k <= n; k++) {
-            B += abs(abel.coef(2 + k)) * pow(R, k) * (pow(1 + bR, k * gamma_) + 1);
+            B += abs(abel.coef(2 + k))
+                * pow(R, k) * (pow(1 + bR, k * gamma_) - 1);
         }
 
         i_t M = B / pow(R, n + 1);
@@ -929,7 +927,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     {   // r1, C1
         // increase r1 until C1 is significantly smaller than a_{-1}
         assert(am1 > 0);
-        i_t max_C1 = am1 / (rough ? 8 : 16);
+        i_t max_C1 = am1 / (rough ? 4 : 16);
         max_C1 = bmp::lower(max_C1);
         for (abel.r1 = abel.r_good + 1; ; abel.r1 += 1) {
             abel.r1 = bmp::upper(abel.r1); // to be safe

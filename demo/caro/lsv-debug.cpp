@@ -175,8 +175,9 @@ int main() {
             cout << "  bound on sup norm of h in A: " << h_norm_A
                 << ", and h' delta_hash-inside A: " << h_prime_hash << "\n";
 
-            // choose a nu arbitrarily
+            // choose nu arbitrarily
             interval_t nu = 4;
+            cout << "nu: " << nu << "\n";
             interval_t abel_am1 = abel.coef(0);
             interval_t varkappa1 = abel.varkappa0
                 * 2 * (abel_am1 * abel.r1 + nu) * nu
@@ -239,9 +240,9 @@ int main() {
                 F2 = bmp::lower(F2);
             }
 
+            cout << "  F1: " << F1 << ", F2: " << F2 << "\n";
             assert(F1 > 0 && F2 > 0);
 
-            cout << "  F1: " << F1 << ", F2: " << F2 << "\n";
             interval_t F1_x = F1 / x_star,
                        F2_x = F2 / pow(x_star, 2);
             F1_x = bmp::lower(F1_x);
@@ -271,79 +272,55 @@ int main() {
 
         {   // verifying conditions away from zero
 
-            // bounds on derivatives of h:
-            // |h^{(k)}(x)| \leq C_k x^{-\gamma - k}
-            // where C_k = \frac{k! C_0}{\eta^k}
-            interval_t C0, C1, C2, C3, C4;
-            {
+            // bound on |h^{(k)}| on [x1, x2]
+            auto hp_max = [&gamma, &h_meta, &h_norm_A]
+                (interval_t x1, interval_t x2, int k) -> interval_t {
+                assert(0 < x1 && x1 <= x2 && x2 <= 1);
+
                 interval_t rho_A = h_meta.rho_A,
                            theta_C = h_meta.theta_C;
-                interval_t eta = min(sin(theta_C), (rho_A + 1 / rho_A - 2) / 4);
-                assert(0 < eta && eta < 1);
-                C0 = h_norm_A / 2 * (1 + 2 * pow(2 * (1 - eta), - gamma)
-                        * exp( (gamma + 1) * pow(2 * (1 + eta), gamma)));
-                C1 = C0 / eta;
-                C2 = C0 * 2 / pow(eta, 2);
-                C3 = C0 * 6 / pow(eta, 3);
-                C4 = C0 * 24 / pow(eta, 4);
-            }
-            interval_t sigma = 0.0002;
-            interval_t x = bmp::lower(x_star);
+                // distance from [1/2,1] to \partial A
+                interval_t di = (rho_A + 1 / rho_A - 2) / 8;
+                // radius around [x1, x2] where we control |h|
+                interval_t dx = min(di, bmp::lower(x1) * sin(theta_C));
 
-            auto T = [&gamma] (const interval_t &x) -> interval_t {
-                return pow(x, - gamma);
-            };
-            auto T_inv = [&gamma] (const interval_t &t) -> interval_t {
-                return pow(t, - 1 / gamma);
-            };
-            auto g = [&T_inv, &H] (const interval_t &t) -> interval_t {
-                return H(T_inv(t)) / t;
+                interval_t C = pow(2, -gamma),
+                           M = (gamma + 1) * pow(2, gamma),
+                           sum_Jk = 1 + C * pow(x1 - dx, - gamma)
+                               * exp(M * pow(x2 + dx, gamma));
+
+                interval_t r = sum_Jk * h_norm_A;
+                for (int j = 1; j <= k; j++)
+                    r *= j / dx;
+
+                return bmp::upper(r);
             };
 
-            interval_t t2 = T(x),
-                       t1 = t2 - 0.0002,
-                       t3 = t2 + 0.0002;
-            interval_t g1 = g(t1),
-                       g2 = g(t2),
-                       g3 = g(t3);
+            interval_t x2 = bmp::lower(x_star),
+                       h2 = H(x2),
+                       dx = 0.1 * h2 * pow(x2, 2) / hp_max(x2, x2, 2);
+            assert(dx < x2 / 2);
+            interval_t x1 = x2 - dx,
+                       x3 = x2 + dx;
+            x1 = bmp::lower(x1);
+            x3 = bmp::upper(x3);
+            interval_t h1 = H(x1),
+                       h3 = H(x3);
+            interval_t x13(x1, x3),
+                       h13(bmp::lower(h3), bmp::upper(h1));
+            interval_t K2 = hp_max(x1, x3, 2),
+                       K3 = hp_max(x1, x3, 3);
+            cout << "K2: " << K2 << ", K3: " << K3 << "\n";
 
-            // |g''(t)| \leq K2 t^{-4}
-            interval_t K2 = 2 * C0 + (3 * gamma + 1) / pow(gamma, 2) * C1
-                + pow(gamma, -2) * C2;
+            // estimate h'(t), h''(t) on [x1, x3]
+            interval_t hp = derivative_range(x1, x3, h1, h3, K2);
+            interval_t hpp = second_derivative_range(x1, x2, x3,
+                    h1, h2, h3, K3);
 
-            // |g'''(t)| \leq K3 t^{-5}
-            interval_t K3 = 6 * C0
-                + (11 * pow(gamma, 2) + 6 * gamma + 1) * pow(gamma, -3) * C1
-                + (6 * gamma + 3) * pow(gamma, -3) * C2
-                + pow(gamma, -3) * C3;
-
-            interval_t gp2_max = K2 * pow(t1, -2),
-                       gp3_max = K3 * pow(t1, -3);
-            gp2_max = bmp::upper(gp2_max);
-            gp3_max = bmp::upper(gp3_max);
-
-            // estimate g'(t), g''(t) on [t1, t3]
-            interval_t gp = derivative_range(t1, t3, g1, g3, gp2_max);
-            interval_t gpp = second_derivative_range(t1, t2, t3, g1, g2, g3, gp3_max);
-
-            cout << "C0: " << C0 << ", C1: " << C1 << ", C2: " << C2 << ", C3: " << C3 << "\n"
-                << "gp2_max: " << gp2_max << ", gp3_max: " << gp3_max << "\n";
-
-            cout << "t2: " << t2 << ", width of g': " << bmp::width(gp)
-                << ", g2: " << g2 << "\n";
-
-            cout << "Derivatives at t: " << t2 << ", t3 - t1: " << t3 - t1 << "\n"
-                << " t2 g'(t1, t3) / g(t2): " << t2 * gp / g2 << "\n"
-                << " t2^2 g''(t1, t3) / g(t2): " << t2*t2 * gpp / g2 << "\n"
-                << "\n";
-
-            // estimate h'(x), h''(x)
-            interval_t xhph = - gamma * (1 + t2 * gp / g2),
-                       xxhpph = gamma * ( (gamma + 1) + (3 * gamma + 1) * t2 * gp / g2
-                               + pow(gamma * t2, 2) * gpp / g2);
-            cout << "Derivatives at x: " << x << ", x3 - x1: " << T_inv(t3) - T_inv(t1) << "\n"
-                << " x h'(x1, x3) / h(x2): " << xhph << "\n"
-                << " x^2 h''(x1, x3) / h(x2): " << xxhpph << "\n"
+            cout << "Derivatives at x: " << x2
+                << ", x3 - x1: " << x3 - x1 << "\n"
+                << " x h'(x1, x3) / h(x): " << x13 * hp / h13 << "\n"
+                << " x^2 h''(x1, x3) / h(x): " << pow(x13, 2) * hpp / h13
                 << "\n";
         }
     }
