@@ -145,7 +145,7 @@ int main() {
 
         {
             cout << "\n\nComputing F_1, F_2:\n";
-            const auto abel = lsv.abel_meta();
+            const auto abel = lsv.abel_rough_meta();
             const auto &h = h_meta.h;
 
             h_norm_A = h.ellipse_norm(h_meta.rho_A) + h_meta.err;
@@ -175,10 +175,12 @@ int main() {
             cout << "  bound on sup norm of h in A: " << h_norm_A
                 << ", and h' delta_hash-inside A: " << h_prime_hash << "\n";
 
+            // choose a nu arbitrarily
+            interval_t nu = 4;
             interval_t abel_am1 = abel.coef(0);
             interval_t varkappa1 = abel.varkappa0
-                * 2 * (abel_am1 * abel.r1 + abel.nu) * abel.nu
-                / (pow(abel.nu, 2) + pow(abel_am1 * abel.r1 + abel.nu, 2));
+                * 2 * (abel_am1 * abel.r1 + nu) * nu
+                / (pow(nu, 2) + pow(abel_am1 * abel.r1 + nu, 2));
             varkappa1 = bmp::lower(varkappa1);
             cout << "  varkappa1: " << varkappa1 << "\n";
 
@@ -187,8 +189,8 @@ int main() {
             assert(R > 0);
             R = sqrt(R);
 
-            interval_t r_star_1 = abel.r1 + abel.nu / abel_am1,
-                       r_star_2 = varkappa1 * abel.nu
+            interval_t r_star_1 = abel.r1 + nu / abel_am1,
+                       r_star_2 = varkappa1 * nu
                            / ((abel_am1 - abel.C1) * (1 - R)),
                        r_star = max(r_star_1, r_star_2);
             x_star = pow(interval_t(2), - 1 - 1 / (2 * gamma))
@@ -202,7 +204,7 @@ int main() {
                 / (abel_am1 - abel.C1)
                 * pow(R, - (1 + 1 / gamma));
             interval_t R_L = 6 * C_psi
-                / (pow(2 * lsv.pi_ * varkappa1, 3) * pow(abel.nu, 2));
+                / (pow(2 * lsv.pi_ * varkappa1, 3) * pow(nu, 2));
             R_L = bmp::upper(R_L);
 
             interval_t C_Delta =

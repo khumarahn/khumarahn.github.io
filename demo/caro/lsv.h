@@ -127,12 +127,12 @@ class LSV {
 
         MatrixXi abel_matrix(int n) const;
         void compute_ellipses();
-        abel_meta_t compute_abel_stuff(int n) const;
+        abel_meta_t compute_abel_stuff(int n, bool rough = false) const;
 
         static constexpr int PREC_ = PREC;
         int N_;
 
-        abel_meta_t abel_;
+        abel_meta_t abel_, abel_rough_;
 
         // angle of sector S_C
         interval_t theta_C_;
@@ -216,8 +216,9 @@ class LSV {
                         mlogeps / log(rho_C_ / rho_A_)
                         ));
 
-            int n = int(ceil(mlogeps)) * 2;
+            int n = int(ceil(mlogeps)) * 4; // TODO what is the best choice?
             abel_ = compute_abel_stuff(n);
+            abel_rough_ = compute_abel_stuff(8, true);  // 八八八八八八八八
 
             compute_derivatives_cs();
             compute_sum_small_const_error();
@@ -236,7 +237,10 @@ class LSV {
                 << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio)
                 << ", rho_C_ / rho_A_: " << bmp::lower(CA_ratio) << "\n"
                 << "  abel_:\n"
-                << "  .coef: " << abel_.coef(0) << ", " << abel_.coef(1) << ", " << abel_.coef(2) << " ...\n"
+                << "    .coef_ni: " << abel_.coef_ni(0)
+                << ", " << abel_.coef_ni(1) << ", " << abel_.coef_ni(2)
+                << ", " << abel_.coef_ni(3) << ", " << abel_.coef_ni(4)
+                << ", ...\n"
                 << "    .n: " << abel_.n << "\n"
                 << "    .r: " << abel_.r
                 << ", .C0: " << abel_.C0
@@ -248,8 +252,23 @@ class LSV {
                 << "    .am1_minus_C1: " << abel_.am1_minus_C1
                 << ", .dist_P1_to_A: " << abel_.dist_P1_to_A << "\n"
                 << "    .L: " << abel_.L << ", abel_.M: " << abel_.M << "\n"
-                << "  .nu: " << abel_.nu
-                << ", .Nstar: " << abel_.Nstar << "\n\n";
+                << "    .nu: " << abel_.nu
+                << ", .Nstar: " << abel_.Nstar << "\n"
+                << "  abel_rough_:\n"
+                << "    .coef_ni: " << abel_rough_.coef_ni(0)
+                << ", " << abel_rough_.coef_ni(1) << ", " << abel_rough_.coef_ni(2)
+                << ", " << abel_rough_.coef_ni(3)
+                << ", ...\n"
+                << "    .n: " << abel_rough_.n << "\n"
+                << "    .r: " << abel_rough_.r
+                << ", .C0: " << abel_rough_.C0
+                << ", .r_good: " << abel_rough_.r_good << "\n"
+                << "    .r1: " << abel_rough_.r1
+                << ", .C1: " << abel_rough_.C1
+                << ", .C2: " << abel_rough_.C2 << "\n"
+                << "    .varkappa0: " << abel_rough_.varkappa0 << "\n"
+                << "    .am1_minus_C1: " << abel_rough_.am1_minus_C1
+                << ", .dist_P1_to_A: " << abel_rough_.dist_P1_to_A << "\n\n";
 
             return;
         }
@@ -263,6 +282,7 @@ class LSV {
         VectorXi abel_coef() const { return abel_.coef; };
 
         abel_meta_t abel_meta() { return abel_; };
+        abel_meta_t abel_rough_meta() { return abel_rough_; };
 
         // branches
         Vector2i left(const interval_t &x) const {
@@ -821,7 +841,7 @@ void LSV<PREC>::compute_ellipses() {
 }
 
 template <int PREC>
-LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
+LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     abel_meta_t abel;
 
     using r_t = real_t;
@@ -889,7 +909,10 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
         abel.C0 = bmp::upper(pow(i_t(2), n + 1) * M * I / (gamma_ * b));
     }
 
-    {   // find a "good" value of r, for which  C0 / (r-1)^n is small
+    // find a "good" value of r, for which  C0 / (r-1)^n is small
+    if (rough) {
+        abel.r_good = abel.r;
+    } else {
         i_t accuracy = pow(i_t(2), - PREC_) * pow(rho_C_, - N_)
             * pow(1 + i_t(1) / 16, - N_);
         abel.r_good = 1 + bmp::upper(pow(abel.C0 / accuracy, i_t(1) / i_t(n)));
@@ -901,12 +924,13 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
     // although the constant term is still zero
 
     const i_t &am1 = abel.coef(0);
+    assert(am1 > 0);
 
     {   // r1, C1
         // increase r1 until C1 is significantly smaller than a_{-1}
         assert(am1 > 0);
-        i_t max_C1 = am1 / 16;
-        max_C1 = bmp::lower(am1);
+        i_t max_C1 = am1 / (rough ? 8 : 16);
+        max_C1 = bmp::lower(max_C1);
         for (abel.r1 = abel.r_good + 1; ; abel.r1 += 1) {
             abel.r1 = bmp::upper(abel.r1); // to be safe
             i_t iC1 = abs(abel.coef(1)) / abel.r1 + abel.C0 / pow(abel.r1 - 1, n);
@@ -939,7 +963,8 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
         abel.C2 = bmp::upper(abel.C2);
     }
 
-    {   // L, nu, M
+    // L, nu, M
+    if (!rough) {
         assert(abel.r1 > 0 && rho_C_ > 0 && abel.varkappa0 > 0 && N_ > 0);
 
         // exponential factor which should be outweighed by
@@ -964,8 +989,8 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
         abel.M = 2 * abel.halfM;
     }
 
-    i_t t_Nstar;
-    {   // Nstar
+    // Nstar
+    if (!rough) {
         // (instead of Caroline's Nstar = int(ceil(nu + mlogeps_)),
         // we slowly increase Nstar until the constraints are satisfied)
 
@@ -1004,15 +1029,14 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
                         Ar1 + abel.nu + 1
                         ));
                 r_t At = bmp::lower(abel_t_sum(t, abel.coef)(0));
-                if (At > min_At) {
-                    t_Nstar = t;
+                if (At > min_At)
                     break;
-                }
             }
         }
     }
 
-    {   // Now set the constant term so that A(1) is approximately 0.
+    // Now set the constant term so that A(1) is approximately 0.
+    if (!rough) {
         // Not trying to control the accuracy
         i_t x = 1;
         for (int i=0; i<abel.Nstar; i++) {
@@ -1037,7 +1061,6 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
     assert(abel.dist_P1_to_A > 0);
 
     // sanity checks
-    assert( rho_A_ > 0 && rho_B_ > 0 && rho_C_ > 0 );
     assert( abel.r > 0 );
     assert( abel.C0 > 0 );
     assert( abel.r_good > 0 );
@@ -1047,11 +1070,12 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n) const {
     assert( abel.C2 > 0 );
     assert( abel.varkappa0 > 0 );
     assert( abel.am1_minus_C1 > 0 );
-    assert( abel.nu > 0 );
-    assert( abel.L > 0 && abel.halfM >= abel.L
-            && abel.M == 2 * abel.halfM);
-
-    assert(2 * pi_ * e_ * abel.nu * abel.varkappa0 > 2 * abel.L - 1);
+    if (!rough) {
+        assert( abel.nu > 0 );
+        assert( abel.L > 0 && abel.halfM >= abel.L
+                && abel.M == 2 * abel.halfM);
+        assert(2 * pi_ * e_ * abel.nu * abel.varkappa0 > 2 * abel.L - 1);
+    }
 
     return abel;
 }
