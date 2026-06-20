@@ -216,7 +216,7 @@ class LSV {
                         mlogeps / log(rho_C_ / rho_A_)
                         ));
 
-            int n = int(ceil(mlogeps)) * 4; // TODO what is the best choice?
+            int n = int(ceil(mlogeps)); // TODO what is the best choice?
             abel_ = compute_abel_stuff(n);
             abel_rough_ = compute_abel_stuff(8, true);  // 八八八八八八八八
 
@@ -883,28 +883,87 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
         }
     }
 
-    {   // compute r, C0
+    {   // compute r, C0  // TODO: RECHECK
         i_t b = pow(2, gamma_);
 
         abel.r = b * (gamma_ + 1);
 
-        i_t R = (1 / abel.r + 1 / b) / 2,
-            bR = b * R;
+        auto binom = [](const i_t& x, int k) -> i_t {
+            i_t r = 1;
+            for (int i = 0; i < k; i++) {
+                r *= (x - i) / (i + 1);
+            }
+            return r;
+        };
 
-        i_t B = 1
-            + abs(abel.coef(0)) / R * (pow(1 - bR, -gamma_) - 1)
-            - abs(abel.coef(1)) * gamma_ * log(1 - bR);
-        for (int k = 1; k <= n; k++) {
-            B += abs(abel.coef(2 + k))
-                * pow(R, k) * (pow(1 + bR, k * gamma_) - 1);
+        i_t z = 1 / abel.r;
+        i_t bz = b * z;
+
+        // G(z) evaluated at z = r^{-1}
+        i_t G_z = abs(abel.coef(0)) / z * (pow(1 - bz, -gamma_) - 1)
+                - abs(abel.coef(1)) * gamma_ * log(1 - bz);
+        for (int k = 1; k <= n; k++)
+            G_z += abs(abel.coef(2 + k)) * pow(z, k)
+                * (pow(1 - bz, -k * gamma_) - 1);
+
+        // coefficients c(j) = c_j
+        auto c_val = [&coef = abel.coef, n, &gamma = gamma_, &binom, &b]
+            (int j) -> i_t {
+            if (j == 0) return 0; // c_0 = 0 by design
+
+            i_t r = coef(0) * pow(b, j + 1) * binom(-gamma, j + 1);
+
+            // (-1)^{j-1}
+            i_t sign = (j % 2 == 0) ? -1 : 1;
+            r += coef(1) * gamma * sign * pow(b, j) / j;
+
+            int max_k = std::min(n, j - 1);
+            for (int k = 1; k <= max_k; k++) {
+                r += coef(2 + k) * pow(b, j - k) * binom(k * gamma, j - k);
+            }
+            return r;
+        };
+
+        // coefficients g(j) = g_j
+        auto g = [&coef = abel.coef, n, &gamma = gamma_, &binom, &b]
+            (int j) -> i_t {
+            if (j == 0)
+                return abs(coef(0)) * b * gamma;
+
+            i_t r = abs(coef(0)) * pow(b, j + 1)
+                * binom(j + gamma, j + 1);
+            r += abs(coef(1)) * gamma * pow(b, j) / j;
+
+            int max_k = std::min(n, j - 1);
+            for (int k = 1; k <= max_k; k++) {
+                r += abs(coef(2 + k)) * pow(b, j - k)
+                    * binom(j - k + k * gamma - 1, j - k);
+            }
+            return r;
+        };
+
+        // number of extra terms
+        int K = rough ? 128 : 2 * n;
+
+        // sum_{j=0}^{n+K} g_j z^j
+        i_t sum_g = 0;
+        for (int j = 0; j <= n + K; j++) {
+            sum_g += g(j) * pow(z, j);
         }
 
-        i_t M = B / pow(R, n + 1);
+        // sum_{j=n+1}^{n+K} |c_j| z^j
+        i_t sum_c_abs = 0;
+        for (int j = n + 1; j <= n + K; j++) {
+            sum_c_abs += abs(c_val(j)) * pow(z, j);
+        }
+
+        i_t M = pow(abel.r, n + 1) * (sum_c_abs + G_z - sum_g);
 
         i_t I = sqrt(pi_) / 2
             * bmp::tgamma(i_t(n) / 2) / bmp::tgamma(i_t(n + 1) / 2);
 
-        abel.C0 = bmp::upper(pow(i_t(2), n + 1) * M * I / (gamma_ * b));
+        abel.C0 = 2 * M * I / (gamma_ * b);
+        abel.C0 = bmp::upper(abel.C0);
     }
 
     // find a "good" value of r, for which  C0 / (r-1)^n is small
