@@ -809,8 +809,10 @@ void LSV<PREC>::compute_ellipses() {
     using i_t = interval_t;
 
     // sector
-    theta_C_ = min(i_t(pi_ / 2), i_t(pi_ / (2 * gamma_)));
-    theta_C_ = bmp::lower(theta_C_);
+    theta_C_ = min(
+            bmp::lower(i_t(pi_ / 2)),
+            bmp::lower(i_t(pi_ / (2 * gamma_)))
+            );
 
     i_t sin_theta_C = sin(theta_C_);
 

@@ -60,7 +60,7 @@ interval_t cheb_range(const cheb_t &p);
 int main() {
     using std::cout;
 
-    for (interval_t gamma = interval_t(8) / 7 + interval_t(-1, 1) * 1e-80; gamma <= 5; gamma += 50) {
+    for (interval_t gamma = 1 + interval_t(-1, 1) * 1e-80; gamma <= 5; gamma += 50) {
         //cout << "gamma: " << gamma << "\n";
         LSV lsv(gamma);
 
