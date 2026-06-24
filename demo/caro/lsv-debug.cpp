@@ -163,7 +163,8 @@ int main() {
             << "\nAll results below hold up to rounding errors when printing numbers.\n";
 
         interval_t x_star,
-                   F1, F2, F3;
+                   F1_minus, F2_minus, F3_minus,
+                   F1_plus, F2_plus, F3_plus;
         {
             //cout << "\n\nComputing F_1, F_2, F_3:\n";
             const auto abel = lsv.abel_rough_meta();
@@ -242,22 +243,31 @@ int main() {
                            delta3 = gamma * (gamma + 1) * abs(1 - gamma) * abs(M1) * x_star
                                + D3 * pow(x_star, 2) +  6 * zh * pow(theta_star, 3);
 
-                F1 = LOWER((gamma * M0 - delta1) / (M0 + delta0));
-                F2 = LOWER((gamma * (gamma + 1) * M0 - delta2) / (M0 + delta0));
-                F3 = LOWER((gamma * (gamma + 1) * (gamma + 2) * M0 - delta3) / (M0 + delta0));
+                F1_minus = LOWER((gamma * M0 - delta1) / (M0 + delta0));
+                F2_minus = LOWER((gamma * (gamma + 1) * M0 - delta2) / (M0 + delta0));
+                F3_minus = LOWER((gamma * (gamma + 1) * (gamma + 2) * M0 - delta3) / (M0 + delta0));
+
+                assert(LOWER(M0 - delta0) > 0);
+
+                F1_plus = UPPER((gamma * M0 + delta1) / (M0 - delta0));
+                F2_plus = UPPER((gamma * (gamma + 1) * M0 + delta2) / (M0 - delta0));
+                F3_plus = UPPER((gamma * (gamma + 1) * (gamma + 2) * M0 + delta3) / (M0 - delta0));
             }
 
-            //cout << "  F1: " << F1 << ", F2: " << F2 << ", F3: " << F3 << "\n";
-            assert(F1 > 0 && F2 > 0 && F3 > 0);
+            // Verify the lower bounds are strictly positive
+            assert(F1_minus > 0 && F2_minus > 0 && F3_minus > 0);
 
-            interval_t F1_x = LOWER(F1 / pow(x_star, 1)),
-                       F2_x = LOWER(F2 / pow(x_star, 2)),
-                       F3_x = LOWER(F3 / pow(x_star, 3));
+            interval_t F1_minus_x = LOWER(F1_minus / pow(x_star, 1)),
+                       F2_minus_x = LOWER(F2_minus / pow(x_star, 2)),
+                       F3_minus_x = LOWER(F3_minus / pow(x_star, 3));
+            interval_t F1_plus_x = UPPER(F1_plus / pow(x_star, 1)),
+                       F2_plus_x = UPPER(F2_plus / pow(x_star, 2)),
+                       F3_plus_x = UPPER(F3_plus / pow(x_star, 3));
 
-            cout << "\nTheorem. For all 0 < x <= " << LOWER(x_star) << ",\n"
-                << "  h'(x) / h(x) <= - "   << F1 << " / x <= - " << F1_x << "\n"
-                << "  h''(x) / h(x) >= "    << F2 << " / x^2 >= " << F2_x << "\n"
-                << "  h'''(x) / h(x) <= - " << F3 << " / x^3 <= - " << F3_x << "\n";
+            cout << "\nLemma. For all 0 < x <= " << LOWER(x_star) << ",\n"
+                << "  - " << F1_plus << " / x <= h'(x) / h(x) <= - " << F1_minus << " / x\n"
+                << "  "   << F2_minus << " / x^2 <= h''(x) / h(x) <= "  << F2_plus << " / x^2\n"
+                << "  - " << F3_plus << " / x^3 <= h'''(x) / h(x) <= - " << F3_minus << " / x^3\n";
 
             // sanity check
             {
@@ -273,10 +283,10 @@ int main() {
                     << "  h''(x) / h(x) * x^2: "
                     << hpp / H0 * pow(x_star, 2) << "\n\n";
             }
-        } // computing F1, F2
+        } // computing F_k
 
         {
-            cout << "Theorem. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on [1/2,1].\n"
+            cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on [1/2,1].\n"
                 << "Proving...\n";
             interval_t
                 hp1_max = UPPER(cheb_range(hp1_cheb) + hp1_cheb_err),
@@ -285,120 +295,192 @@ int main() {
             assert(hp1_max < 0 && hp2_min > 0 && hp3_max < 0);
             cout << "  ... done. h'(x) <= " << hp1_max << ", h''(x) >= " << hp2_min
                 << ", h'''(x) <= " << hp3_max << " ∎\n";
-            cout << "  sanity check: h'(1) is " << Hp1(1)
+            cout << "\nSanity check: h'(1) is " << Hp1(1)
                 << ", h''(1) is " << Hp2(1)
                 << ", h'''(1) is " << Hp3(1)
                 << "\n\n";
         }
 
         {
-            cout << "Theorem. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on (0, 1].\n"
+            cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on (0, 1].\n"
                 << "Proving...\n";
 
-            interval_t min_hp3 = 0;
+            // get a decreasing sequence P where first N points
+            // are 1, 1 - 0.5/N, ..., 0.5 + 0.5/N, and P(k+N) is the preimage of P(k)
+            const int N = 16;
+            std::vector<interval_t> P;
 
-            // create a grid on [1/2,1], compute their preimages down to below x_star,
-            // and values of h at all these points
-            int GRID_SIZE = 16; // keep it a power of two
-            int N = 0; // depth of preimages
-            for (interval_t x = 1; UPPER(x) > LOWER(x_star); ) {
-                N++;
-                x = lsv.left_inv(x)(0);
+            // first N points
+            for (int k = 0; k < N; k++) {
+                P.push_back(1 - interval_t(k) / (2 * N));
             }
+            // point N+1 is exactly 1/2
+            P.push_back(HALF);
 
-            // GRID_SIZE + 1 points between 1/2 and 1, plus one extra point on the left
-            MatrixXi P(N + 1, GRID_SIZE + 2),
-                     H_val(N + 1, GRID_SIZE + 2);
+            // the rest, with at least N + 3 points in (0, x_star]
+            // P(P_bound) and onward are in (0, x_star]
+            int P_bound = -1;
+            while (true) {
+                int k = P.size();
+                P.push_back(lsv.left_inv(P[k - N])(0));
+
+                if (P_bound == -1 && UPPER(P.back()) <= LOWER(x_star))
+                    P_bound = k;
+                if (P_bound != -1 && P.size() >= P_bound + N + 3)
+                    break;
+            }
+            const int M = P.size();
+
+            // compute values of h iteratively from the left
+            VectorXi H_val(M);
 
 #pragma omp parallel for
-            for (int j = 0; j <= GRID_SIZE + 1; j++) {
-                P(0, j) = interval_t(GRID_SIZE - 1 + j) / (GRID_SIZE * 2);
-                for (int k = 1; k <= N; k++) {
-                    P(k, j) = lsv.left_inv(P(k - 1, j))(0);
-                }
-                H_val(N, j) = H(P(N, j));
-                for (int k = N; k > 0; k--) {
-                    H_val(k - 1, j) = HALF * H(HALF * (interval_t(1) + P(k - 1, j))) + H_val(k, j) / lsv.left(P(k, j))(1);
-                }
+            for (int k = M - 1; k >= M - N; k--) {
+                H_val(k) = H(P[k]);
             }
 
-            // initialize the C_0, C_1, C_2, C_3 bounds
-            MatrixXi C(GRID_SIZE + 2, 4);
-            for (int j = 1; j <= GRID_SIZE; j++) {
-                interval_t q = P(N, j + 1),
-                           hq = LOWER(H_val(N, j + 1));
-                C(j, 0) = hq;
-                C(j, 1) = LOWER(F1 / q * hq);
-                C(j, 2) = LOWER(F2 / pow(q, 2) * hq);
-                C(j, 3) = LOWER(F3 / pow(q, 3) * hq);
+            for (int k = M - N - 1; k >= 0; k--) {
+                interval_t f_prime = lsv.left(P[k + N])(1);
+                H_val(k) = HALF * H((1 + P[k]) / 2) + H_val(k + N) / f_prime;
             }
 
-            auto max0 = [](interval_t x) -> interval_t {
+            // array of bounds (C_0, C_1, C_2, C_3),
+            // so that (-1)^k h^{(k)} \geq C_k
+            // C(k) are the bounds that hold on the interval [P(k+1), P(k)]
+            MatrixXi C(M - 1, 4);
+
+            // init in (0, x_star] using the F1--F3 bounds
+            for (int k = M - 2; k >= P_bound; k--) {
+                interval_t q = P[k];
+                interval_t hq = LOWER(H_val(k));
+                C(k, 0) = hq;
+                C(k, 1) = LOWER(F1_minus / q * hq);
+                C(k, 2) = LOWER(F2_minus / pow(q, 2) * hq);
+                C(k, 3) = LOWER(F3_minus / pow(q, 3) * hq);
+            }
+
+            auto max0 = [](const interval_t &x) -> interval_t {
                 return LOWER(x) > 0 ? x : 0;
             };
 
-            // Apply Lemma lem:hmon upwards
-            for (int k = N - 1; k >= 0; k--) {
-                MatrixXi D(GRID_SIZE + 2, 4);
+            // apply Lemma lem:hmon from left to right
+            for (int k = P_bound - 1; k >= 0; k--) {
+                const interval_t
+                    &o = P[k + N + 2],
+                    &p = P[k + N + 1],
+                    &q = P[k + N];
 
-                for (int j = 1; j <= GRID_SIZE; j++) {
-                    interval_t p = P(k + 1, j),
-                               q = P(k + 1, j + 1);
-                    interval_t pq(LOWER(p), UPPER(q));
+                interval_t pq(LOWER(p), UPPER(q));
 
-                    interval_t d1 = fp(1, pq), d2 = fp(2, pq), d3 = fp(3, pq), d4 = fp(4, pq);
+                const interval_t
+                    &ho = H_val(k + N + 2),
+                    &hp = H_val(k + N + 1);
+                    //&hq = H_val(k + N);
 
-                    interval_t f1 = LOWER(d1),
-                               F1 = UPPER(d1),
-                               f2 = LOWER(d2),
-                               F2 = UPPER(d2),
-                               f3m = max0(-UPPER(d3)),
-                               F3p = max0(UPPER(d3)),
-                               f4p = max0(LOWER(d4)),
-                               F4m = max0(-LOWER(d4));
+                interval_t hp_u = UPPER(hp),
+                           h_fq = (1 + P[k]) / 2;
 
-                    interval_t hp = H_val(k + 1, j),
-                               hp_u = UPPER(hp),
-                               h_fq = HALF * (1 + P(k, j + 1));
+                interval_t d1 = fp(1, pq),
+                           d2 = fp(2, pq),
+                           d3 = fp(3, pq),
+                           d4 = fp(4, pq);
 
-                    const interval_t
-                        &c0 = C(j, 0),
-                        &c1 = C(j, 1),
-                        &c2 = C(j, 2),
-                        &c3 = C(j, 3);
+                interval_t f1 = LOWER(d1),
+                           F1 = UPPER(d1),
+                           f2 = LOWER(d2),
+                           F2 = UPPER(d2),
+                           f3m = max0(-UPPER(d3)),
+                           F3p = max0(UPPER(d3)),
+                           f4p = max0(LOWER(d4)),
+                           F4m = max0(-LOWER(d4));
 
-                    // an interval left to [p, q] gives us C'
-                    interval_t o = P(k + 1, j - 1),
-                               ho = H_val(k + 1, j - 1);
-                    interval_t C_prime = UPPER(-(hp - ho) / (p - o));
+                const interval_t
+                    &c0 = C(k + N, 0),
+                    &c1 = C(k + N, 1),
+                    &c2 = C(k + N, 2),
+                    &c3 = C(k + N, 3);
 
-                    // compute D_0, ..., D_3 using lem:hmon
-                    D(j, 0) = LOWER( c0/F1 + HALF*H(h_fq) );
+                // upper bound on -h'
+                interval_t C_prime = UPPER(-(hp - ho) / (p - o));
 
-                    D(j, 1) = LOWER( c1/pow(F1, 2) + c0*f2/pow(F1, 3) - interval_t(1)/4 * Hp1(h_fq) );
+                C(k, 0) = LOWER(H_val(k));
 
-                    D(j, 2) = LOWER( c2/pow(F1, 3) + 3*c1*f2/pow(F1, 4) + 3*c0*pow(f2, 2)/pow(F1, 5)
-                            + c0*f3m/pow(F1, 4) - hp_u*F3p/pow(f1, 4) + interval_t(1)/8 * Hp2(h_fq) );
+                C(k, 1) = LOWER( c1/pow(F1, 2) + c0*f2/pow(F1, 3) - interval_t(1)/4 * Hp1(h_fq) );
 
-                    D(j, 3) = LOWER( c3/pow(F1, 4) + 6*c2*f2/pow(F1, 5) + 15*c1*pow(f2, 2)/pow(F1, 6)
-                            + 15*c0*pow(f2, 3)/pow(F1, 7) + (4*c1*f3m + c0*f4p)/pow(F1, 5)
-                            + 10*c0*f2*f3m/pow(F1, 6) - (4*C_prime*F3p + hp_u*F4m)/pow(f1, 5)
-                            - 10*hp_u*F2*F3p/pow(f1, 6) - interval_t(1)/16 * Hp3(h_fq) );
+                C(k, 2) = LOWER( c2/pow(F1, 3) + 3*c1*f2/pow(F1, 4) + 3*c0*pow(f2, 2)/pow(F1, 5)
+                        + c0*f3m/pow(F1, 4) - hp_u*F3p/pow(f1, 4) + interval_t(1)/8 * Hp2(h_fq) );
 
-                    assert(D(j, 0) > 0 && D(j, 1) > 0 && D(j, 2) > 0 && D(j, 3) > 0);
-                }
+                C(k, 3) = LOWER( c3/pow(F1, 4) + 6*c2*f2/pow(F1, 5) + 15*c1*pow(f2, 2)/pow(F1, 6)
+                        + 15*c0*pow(f2, 3)/pow(F1, 7) + (4*c1*f3m + c0*f4p)/pow(F1, 5)
+                        + 10*c0*f2*f3m/pow(F1, 6) - (4*C_prime*F3p + hp_u*F4m)/pow(f1, 5)
+                        - 10*hp_u*F2*F3p/pow(f1, 6) - interval_t(1)/16 * Hp3(h_fq) );
 
-                C = D;
+                assert(C(k, 0) > 0 && C(k, 1) > 0 && C(k, 2) > 0 && C(k, 3) > 0);
+            }
 
-                if (min_hp3 >= 0) {
-                    min_hp3 = -C(1, 3);
-                }
-                for(int j = 1; j <= GRID_SIZE; j++) {
-                    min_hp3 = max(-C(j, 3), min_hp3);
-                }
+            // find the maximum of h'''
+            interval_t min_hp3 = -C(0, 3);
+            for (int k = 1; k < M - 1; k++) {
+                min_hp3 = max(-C(k, 3), min_hp3);
             }
 
             cout << "  ... done. h'''(x) <= " << min_hp3 << " ∎\n";
+
+            // lower bound (h'/h)' and upper bound (h''/h)'
+            interval_t min_hp_h_prime,
+                       max_hpp_h_prime;
+
+            {
+                // start with a bound on (0, x_star]
+                interval_t B1 = F2_minus - pow(F1_plus, 2);
+                min_hp_h_prime = LOWER(B1 / pow(x_star, 2));
+
+                interval_t B2 = F3_minus - F2_plus * F1_plus;
+                max_hpp_h_prime = UPPER(-B2 / pow(x_star, 3));
+
+                // do [x_star, 1], iterating over [P[k+1], P[k]]
+                for (int k = 0; k <= P_bound - 1; k++) {
+                    const interval_t
+                        &n = P[k + 3],
+                        &o = P[k + 2],
+                        &p = P[k + 1];
+                        //&q = P[k];
+                    const interval_t
+                        &hn = H_val(k + 3),
+                        &ho = H_val(k + 2),
+                        &hp = H_val(k + 1);
+                        //&hq = H_val(k);
+                    // Local lower bounds for h, h'', -h'''
+                    const interval_t
+                        &c0 = C(k, 0),
+                        &c2 = C(k, 2),
+                        &c3 = C(k, 3);
+
+                    // max of -h' as a finite difference on the left
+                    interval_t M1 = UPPER(- derivative_range(o, p, ho, hp, 0));
+
+                    // max of h'' as a divided difference on the left
+                    interval_t M2 = UPPER(second_derivative_range(n, o, p, hn, ho, hp, 0));
+
+                    // bounds for the derivative ratios on [p, q]
+                    interval_t pq_hp_h_prime = LOWER((c2 * c0 - pow(M1, 2)) / pow(hp, 2)),
+                               pq_hpp_h_prime = UPPER((-c3 * c0 + M2 * M1) / pow(hp, 2));
+
+                    min_hp_h_prime = min(min_hp_h_prime, pq_hp_h_prime);
+                    max_hpp_h_prime = max(max_hpp_h_prime, pq_hpp_h_prime);
+                }
+            }
+
+            cout << "\nTheorem. On (0,1]:\n"
+                 << "  (h'/h)' >= " << min_hp_h_prime << "\n"
+                 << "  (h''/h)' <= " << max_hpp_h_prime << "\n";
+
+            cout << "\nSanity check:\n"
+                << "  (h'/h)'(1): " << Hp2(1) / H(1) - pow(Hp1(1) / H(1), 2) << "\n"
+                << "  (h''/h)'(1): " << Hp3(1) / H(1) - Hp1(1) * Hp2(1) / pow(H(1), 2) << "\n";
+
+            assert(min_hp_h_prime > 0 && max_hpp_h_prime < 0);
+
         }
 
         cout << "\n";
