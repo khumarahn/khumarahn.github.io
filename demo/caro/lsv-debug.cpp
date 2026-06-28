@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 48;   // in bits
+const int PREC = 32;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -307,7 +307,7 @@ int main() {
 
             // get a decreasing sequence P where first N points
             // are 1, 1 - 0.5/N, ..., 0.5 + 0.5/N, and P(k+N) is the preimage of P(k)
-            const int N = 16;
+            const int N = 8;
             std::vector<interval_t> P;
 
             // first N points
