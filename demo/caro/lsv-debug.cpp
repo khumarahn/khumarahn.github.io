@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 32;   // in bits
+const int PREC = 42;   // in bits
 
 // headers for multiprecision and interval arithmetics
 
@@ -60,23 +60,27 @@ interval_t cheb_range(const cheb_t &p);
 int main() {
     using std::cout;
 
-    for (interval_t gamma = 1 + interval_t(-1, 1) * 1e-80; gamma <= 5; gamma += 50) {
+    for (interval_t gamma = 1 + interval_t(-1, 1) * 1e-50; gamma <= 5; gamma += 50) {
         //cout << "gamma: " << gamma << "\n";
         LSV lsv(gamma);
 
         // derivatives of f(x) = x (1 + 2^gamma x^gamma)
-        auto fp = [&gamma](int n, const interval_t &x) -> interval_t {
-            const interval_t c = pow(2, gamma) * (gamma + 1);
+        auto fp = [&gamma,
+             c1 = pow(2, gamma) * (gamma + 1),
+             c2 = pow(2, gamma) * (gamma + 1) * gamma,
+             c3 = pow(2, gamma) * (gamma + 1) * gamma * (gamma - 1),
+             c4 = pow(2, gamma) * (gamma + 1) * gamma * (gamma - 1) * (gamma - 2)]
+                 (int n, const interval_t &x) -> interval_t {
             if (n == 0) {
                 return x * (1 + pow(2 * x, gamma));
             } else if (n == 1) {
-                return 1 + c * pow(x, gamma);
+                return 1 + c1 * pow(x, gamma);
             } else if (n == 2) {
-                return c * gamma * pow(x, gamma - 1);
+                return c2 * pow(x, gamma - 1);
             } else if (n == 3) {
-                return c * gamma * (gamma - 1) * pow(x, gamma - 2);
+                return c3 * pow(x, gamma - 2);
             } else if (n==4) {
-                return c * gamma * (gamma - 1) * (gamma - 2) * pow(x, gamma - 3);
+                return c4 * pow(x, gamma - 3);
             } else {
                 assert(n >= 0 && n <= 4);
                 return 0;
@@ -165,7 +169,8 @@ int main() {
         interval_t x_star,
                    F1_minus, F2_minus, F3_minus,
                    F1_plus, F2_plus, F3_plus;
-        {
+
+        for (int r_star_factor = 1; r_star_factor <= 64; r_star_factor *= 2) {
             //cout << "\n\nComputing F_1, F_2, F_3:\n";
             const auto abel = lsv.abel_rough_meta();
 
@@ -199,6 +204,10 @@ int main() {
                        r_star_2 = varkappa1 * nu
                            / ((abel_am1 - abel.C1) * (1 - R)),
                        r_star = max(r_star_1, r_star_2);
+
+            // artificially increare r_star to reduce the error in F-constants
+            r_star *= r_star_factor;
+
             x_star = pow(interval_t(2), - 1 - 1 / (2 * gamma))
                 * pow(r_star, - 1 / gamma);
 
@@ -218,7 +227,7 @@ int main() {
                 + (2 * abel_am1 + abel.C2) / (r_star * pow(abel_am1 - abel.C1, 2));
             interval_t Delta_star = UPPER(
                     (gamma / 2 * abel.r1 * abel.C1 + interval_t(1) / 4
-                     + C_Delta / 24) * h_cheb_err_A
+                     + C_Delta / 24) * h_sup_A
                     + pow(r_star, - 1 - 1 / gamma) / (48 * gamma * (abel_am1 - abel.C1)) * hp1_hash
                     + R_L / 2
                     );
@@ -269,8 +278,10 @@ int main() {
                 << "  "   << F2_minus << " / x^2 <= h''(x) / h(x) <= "  << F2_plus << " / x^2\n"
                 << "  - " << F3_plus << " / x^3 <= h'''(x) / h(x) <= - " << F3_minus << " / x^3\n";
 
-            // sanity check
-            {
+            if ((F1_plus - F1_minus) / F1_plus > 0.125) {
+                cout << "** the bounds on h'/h are too far apart, trying again... **\n";
+            } else {
+                // sanity check
                 interval_t hd = x_star * 0.001,
                            H_m = H(x_star - hd),
                            H0 = H(x_star),
@@ -282,6 +293,8 @@ int main() {
                     << hp / H0 * x_star << ",\n"
                     << "  h''(x) / h(x) * x^2: "
                     << hpp / H0 * pow(x_star, 2) << "\n\n";
+
+                break;
             }
         } // computing F_k
 
@@ -340,7 +353,7 @@ int main() {
             }
 
             for (int k = M - N - 1; k >= 0; k--) {
-                interval_t f_prime = lsv.left(P[k + N])(1);
+                interval_t f_prime = fp(1, P[k + N]);
                 H_val(k) = HALF * H((1 + P[k]) / 2) + H_val(k + N) / f_prime;
             }
 
