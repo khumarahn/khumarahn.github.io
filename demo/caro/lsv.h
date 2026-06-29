@@ -1,5 +1,7 @@
 #pragma once
 
+#include <concepts>
+#include <algorithm>
 #include <limits>
 #include <vector>
 #include <complex>
@@ -180,10 +182,8 @@ class LSV {
                 for (int ell = 1; ell <= abel_.L; ell++) {
                     interval_t w = - q * (2 * ell - 1);
                     complex_interval_t ww (0, w);
-                    c(m - 1) += complex_interval_t(B2(ell))
-                        * complex_interval_t(pow(tau, -(2*ell - 1)))
-                        * exp(ww)
-                        / complex_interval_t(2 * ell);
+                    interval_t www = B2(ell) * pow(tau, -(2*ell - 1)) / (2 * ell);
+                    c(m - 1) += www * exp(ww);
                 }
             }
             return;
@@ -219,19 +219,19 @@ class LSV {
 
             interval_t mlogeps = log(interval_t(2)) * PREC_;
 
-            N_ = int(ceil(
+            N_ = int(ceil(bmp::upper(interval_t(
                         mlogeps / log(rho_C_ / rho_A_)
-                        ));
+                        ))));
 
             {   // NEED_DIGITS_ (approximately)
                 // when computing the norm of the transfer operator matrix, we want for j < N:
-                //   min(\rho_{C_+}^{-j} \rho_C^j, 10^{-DIGITS} \rho_C^j) < 0.0001
+                //   min(\rho_{C_+}^{-j} \rho_C^j, 10^{-DIGITS} \rho_C^j) < 0.001
                 interval_t J = bmp::upper(interval_t(
-                            12 / log (rho_C_plus_ / rho_C_)
+                            13 / log (rho_C_plus_ / rho_C_)
                             ));
                 if (J > N_) J = N_;
                 NEED_DIGITS_ = int(ceil(bmp::upper(interval_t(
-                            (12 + J * log(rho_C_)) / log(real_t(10))
+                            (13 + J * log(rho_C_)) / log(real_t(10))
                             ))));
             }
             if(DIGITS < NEED_DIGITS_) {
@@ -320,17 +320,16 @@ class LSV {
             return Vector2i(2 * x - 1, 2);
         }
 
-        // full map
-        Vector2i map(const interval_t &x) const {
-            return (x < 0.5) ? left(x) : right(x);
-        }
-
         // inverses
         Vector2i left_inv(const interval_t &x) const {
+            assert(bmp::lower(x) >= 0);
             // max derivative is
             interval_t md = left(interval_t(1) / 2)(1);
             // an interval enclosing the root
-            interval_t guess(x / md, x);
+            interval_t guess(
+                    bmp::lower(interval_t(x / md)),
+                    bmp::upper(x)
+                    );
 
             auto f = [this, &x] (const interval_t &z) {
                 Vector2<interval_t> r = left(z);
@@ -373,11 +372,11 @@ class LSV {
                 {   // integral
                     interval_t y = this->right_inv(x)(0);
                     VectorXi bi = cheb.beta_integral(0, y, N_);
-                    r += - 2 * Ax(1) * bi;
+                    r -= 2 * Ax(1) * bi;
                 }
 
                 // \varphi(z) / 2
-                r += phi(x) / real_t(2);
+                r += phi(x) / 2;
 
                 {   // derivatives
                     const VectorXci &s = derivatives_s_;
@@ -405,7 +404,7 @@ class LSV {
             interval_t xk = x,
                        inv_Jk = 1;
 
-            // add branches naively dddup to Nstar
+            // add branches naively up to Nstar
             while (bmp::upper(xk) > abel_.x_Nstar) {
                 r += phi(xk) * inv_Jk;
                 Vector2i y = left_inv(xk);
@@ -441,13 +440,14 @@ class LSV {
             interval_t tt = abel_t_inv(w_minus_nu)(0);
             assert(tt > abel_.r1);
 
-            r += abs(Axk(1) * xk) + interval_t(1) / 2;
-            r += eps_sum_small_const_error_;
+            //r += abs(Axk(1) * xk) + interval_t(1) / 2;
+            //r += eps_sum_small_const_error_;
+            interval_t tail_bound = abs(Axk(1) * xk) + interval_t(1) / 2
+                + eps_sum_small_const_error_;
+            r += tail_bound * inv_Jk;
 
             r *= eps;
-            real_t ru = bmp::upper(r);
-            r = interval_t(-ru, ru);
-            return r;
+            return interval_t(-1, 1) * bmp::upper(r);
         }
 
         // Transfer operator for the induced map, the clever one.
@@ -477,12 +477,15 @@ class LSV {
             }
             {   // intersect the elements of R with their theoretical bounds
                 interval_t norm_plus = cheb_sum(norm_point_C_plus_)(0),
-                           C2N = pow(rho_C_plus_, - 2 * N_);
+                           C2N = pow(rho_C_plus_, - 2 * N_),
+                           norm_plus_C2N = norm_plus / (1 - C2N);
+                norm_plus_C2N = bmp::upper(norm_plus_C2N);
                 VectorXi Cj(N_), Bbk(N_);
                 for (int k = 0; k < N_; k++) {
                     Cj(k) = pow(rho_C_plus_, k);
-                    Bbk(k) = ( pow(rho_B_plus_, k) + pow(rho_B_plus_, -k) )
-                        * norm_plus / (1 - C2N);
+                    Bbk(k) = (pow(rho_B_plus_, k) + pow(rho_B_plus_, -k))
+                            * norm_plus_C2N;
+                    Bbk(k) = bmp::upper(Bbk(k));
                 }
 
                 for (int j = 0; j < N_; j++) {
@@ -561,8 +564,8 @@ class LSV {
                     }
                 }
                 //std::cout << "Max width of the intervals in DQD: " << max_DQD_width
-                //<< "  [bad if large]\n";
-                assert(max_DQD_width < 0.0001);
+                //    << "  [bad if large]\n";
+                assert(max_DQD_width < 0.001);
 
                 interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
 
@@ -578,7 +581,7 @@ class LSV {
 
                 interval_t r(1);
                 for (int j = 1; j <= k; j++) {
-                    r *= interval_t(n - j + 1) / interval_t(j);
+                    r = (r * (n - j + 1)) / j;
                 }
                 return r;
             };
@@ -639,8 +642,8 @@ class LSV {
                 if (bmp::upper(delta[n]) < 0.5 || n > 4)
                     break;
 
-                bDelta_n *= bDelta;
                 norm_bDelta.push_back(norm_Q(bDelta_n, rho_A_, rho_C_));
+                bDelta_n *= bDelta;
             }
 
             assert(delta[n] < 0.5);
@@ -685,7 +688,7 @@ class LSV {
             // Horner's method
             for (int j = n; j >= 1; j--) {
                 A_tail = coef(2 + j) + ti * A_tail;
-                dA_tail = var_t(j) * coef(2 + j) + ti * dA_tail;
+                dA_tail = var_t(j * coef(2 + j)) + ti * dA_tail;
             }
             A += ti * A_tail;
             dA -= ti * ti * dA_tail;
@@ -705,10 +708,9 @@ class LSV {
         // * interval A(x)
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel(const var_t &x) const {
-            const var_t gamma = var_t(gamma_);
-            var_t t = pow(x, -gamma);
+            var_t t = pow(x, -gamma_);
             Vector2<var_t> A = abel_t(t);
-            return Vector2<var_t>(A(0), -gamma * (t / x) * A(1));
+            return Vector2<var_t>(A(0), -gamma_ * (t / x) * A(1));
         }
 
         // inverse
@@ -745,7 +747,7 @@ class LSV {
         Vector2ci abel_t_inv(const complex_interval_t &a) const {
             auto m = [] (complex_interval_t x) {
                 using bmp::median;
-                return complex_interval_t(median(x.real()), median(x.imag()));
+                return complex_t(median(x.real()), median(x.imag()));
             };
             Vector2c g = abel_t_inv<complex_t>(m(a));
             complex_interval_t g0 = g(0),
@@ -765,8 +767,8 @@ class LSV {
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel_inv(const var_t &a) const {
             Vector2<var_t> Ai = abel_t_inv(a);
-            const var_t & t = Ai(0), dAt = Ai(1);
-            var_t x = pow(t, var_t(-gamma_inv_));
+            const var_t &t = Ai(0), &dAt = Ai(1);
+            var_t x = pow(t, -var_t(gamma_inv_));
             return Vector2<var_t>(x, -(x / t) * gamma_inv_ * dAt);
         }
 
@@ -774,7 +776,7 @@ class LSV {
         template <typename i_t> requires type_one_of<i_t, interval_t, complex_interval_t>
         Vector2<i_t> abel_t_error(const i_t &t) const {
 
-            // check is we are in the right region where we can compute the
+            // check if we are in the right region where we can compute the
             // Abel function accurately
             if constexpr (type_one_of<i_t, complex_interval_t>)
                 assert( bmp::lower(t.real()) >= abel_.r_good );
@@ -782,9 +784,9 @@ class LSV {
                 assert( bmp::lower(t) >= abel_.r_good );
 
             // ir_t is the underlying real interval type
-            using ir_t = std::conditional<
+            using ir_t = std::conditional_t<
                 type_one_of<i_t,complex_interval_t>,  interval_t,  i_t
-                >::type;
+                >;
 
             ir_t factor0 = abel_.C0 * pow(abs(t), -abel_.n),
                  window0 (-bmp::upper(factor0), bmp::upper(factor0)),
@@ -820,7 +822,7 @@ class LSV {
                 for (int j = m; j >= 1; j--)
                     A(j - 1) = j * ((m + 1) * A(j - 1) - A(j));
                 if (m % 2 == 0)
-                    B2[m / 2] = interval_t(A(0)) / interval_t(fact);
+                    B2(m / 2) = interval_t(A(0)) / interval_t(fact);
             }
             return B2;
         }
@@ -874,7 +876,8 @@ void LSV<PREC>::compute_ellipses() {
         (const interval_t& rho) -> interval_t {
             interval_t a = (rho + 1 / rho) / 8,
                        b = (rho - 1 / rho) / 8,
-                       q = 1 / ((g + 1) * pow(2, g));
+                       q = 1 / ((g + 1) * pow(2, g)),
+                       q2 = q * q;
 
             int steps = 512;
             interval_t dt = pi / (2 * steps);
@@ -887,10 +890,11 @@ void LSV<PREC>::compute_ellipses() {
                            y = b * sin(t);
 
                 interval_t r = sqrt(x * x + y * y),
-                           phi = atan2(y, x);
+                           phi = atan2(y, x),
+                           rg = pow(r, g);
 
                 interval_t dist = sqrt(
-                        pow(r, 2 * g) + 2 * q * pow(r, g) * cos(g * phi) + q * q
+                        rg * rg + 2 * q * rg * cos(g * phi) + q2
                         );
 
                 if (i == 0 || bmp::lower(dist) < min_L) min_L = bmp::lower(dist);
@@ -953,10 +957,6 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     }
 
     {   // compute r, C0  // TODO: RECHECK
-        i_t b = pow(2, gamma_);
-
-        abel.r = b * (gamma_ + 1);
-
         auto binom = [](const i_t& x, int k) -> i_t {
             i_t r = 1;
             for (int i = 0; i < k; i++) {
@@ -965,8 +965,11 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
             return r;
         };
 
-        i_t z = 1 / abel.r;
-        i_t bz = b * z;
+        i_t b = pow(2, gamma_);
+        abel.r = b * (gamma_ + 1);
+
+        i_t z = 1 / abel.r,
+            bz = 1 / (gamma_ + 1); // b * z;
 
         // G(z) evaluated at z = r^{-1}
         i_t G_z = abs(abel.coef(0)) / z * (pow(1 - bz, -gamma_) - 1)
@@ -1133,7 +1136,8 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
                 E = pow(abel.max_kappa_ratio / D, gamma_ / (gamma_ + 1));
             assert(E > 1);
 
-            t_good_for_kappa = C / (E - 1);
+            // want t / (t - C) <= E
+            t_good_for_kappa = C * E / (E - 1);
             t_good_for_kappa = bmp::upper(t_good_for_kappa);
         }
 
@@ -1156,19 +1160,10 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
             }
         }
         abel.x_Nstar = bmp::lower(x);
-    }
 
-    // Now set the constant term so that A(1) is approximately 0.
-    if (!rough) {
-        // Not trying to control the accuracy
-        i_t x = 1;
-        for (int i=0; i<abel.Nstar; i++) {
-            x = left_inv(x)(0);
-        }
-
-        i_t t = pow(x, -gamma_);
-
-        // now, we should have A(t) = Nstar
+        // Set the constant term so that A(1) is approximately 0,
+        // not trying to control the accuracy...
+        // Since we should have A(t) = Nstar:
         abel.coef(2) = 0;
         abel.coef(2) = abel.Nstar - bmp::median(abel_t_sum(t, abel.coef)(0));
     }
@@ -1207,8 +1202,9 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
 // precompute the constant part of the error in cheb_sum
 template <int PREC>
 void LSV<PREC>::compute_sum_small_const_error() {
-    const interval_t &nu = abel_.nu;
-    const interval_t &vk = abel_.varkappa0;
+    const interval_t
+        &nu = abel_.nu,
+        &vk = abel_.varkappa0;
 
     interval_t Lfac = 1;
     for (int ell = 1; ell <= 2 * abel_.L + 1; ell++)
@@ -1249,7 +1245,7 @@ void LSV<PREC>::compute_sum_small_const_error() {
     VectorXi cheb_max_r1(N_);
     {
         interval_t rr = 2 * pow(abel_.r1, - gamma_inv_),
-                   tt = 1 + rr + sqrt(rr * rr + 2 * rr);
+                   tt = 1 + rr + sqrt(pow(rr + 1, 2) - 1);
         for (int i = 0; i < N_; i++)
             cheb_max_r1(i) = (pow(tt, i) + pow(tt, -i)) / 2;
     }
@@ -1274,27 +1270,28 @@ LSV<PREC>::MatrixXi LSV<PREC>::abel_matrix(int n) const {
     // * second column: coefficients of log(t(left(z)))
     // * 2+n column: coefficients of t(left(z))^{-k} - t^{-k}
     MatrixXi X = MatrixXi::Zero(n + 2, n + 2);
-    const interval_t g = gamma_, b = pow(2, g);
+    const interval_t
+        &g = gamma_,
+        b = pow(2, g);
     interval_t c;
 
     c = - g * b;
     for (int j = 0; j <= n + 1; j++) {
-        X(j,0) = c;
-        c *= b * (-g - j - 1) / (j + 2);
+        X(j, 0) = c;
+        c *= b * (-g - (j + 1)) / (j + 2);
     }
     c = - g * b;
     for (int j = 1; j <= n + 1; j++) {
-        X(j,1) = c / j;
+        X(j, 1) = c / j;
         c *= -b;
     }
     for (int k = 1; k <= n; k++) {
         c = 1;
         for (int j = k + 1; j <= n + 1; j++) {
-            c *= (k * g - j + k + 1) * b / (j - k);
-            X(j, k+1) = c;
+            c *= (k * g - (j - k - 1)) * b / (j - k);
+            X(j, k + 1) = c;
         }
     }
-
     return X;
 }
 
