@@ -331,7 +331,7 @@ interval_t<d10> matrix_L2_norm(const MatrixXi<d10> &Q) {
             M(i,j) = bmp::median(Q(i,j));
 
     // floating point SVD
-    Eigen::JacobiSVD<M_t> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::JacobiSVD<M_t, Eigen::ComputeFullU | Eigen::ComputeFullV> svd(M);
     // M = U D V^*
     M_t U_fp = svd.matrixU();
     M_t V_fp = svd.matrixV();

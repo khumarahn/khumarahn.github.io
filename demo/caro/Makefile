@@ -7,7 +7,7 @@ LL = -I./eigen -Wall -std=c++23 -lgmp -lmpfr -lmpfi -fopenmp
 # this is fassssster
 #DD = -g -fsanitize=undefined
 # this is for profiling
-DD = -g -fno-omit-frame-pointer
+#DD = -g -fno-omit-frame-pointer
 
 .PHONY lsv::
 	rm -f lsv-cpp.js lsv-cpp.wasm

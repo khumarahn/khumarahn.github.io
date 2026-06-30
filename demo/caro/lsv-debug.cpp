@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-const int PREC = 42;   // in bits
+const int PREC = 32;   // in bits
 
 // headers for multiprecision and interval arithmetics
 

@@ -7,6 +7,10 @@
 #include <complex>
 #include <cmath> // for pow, abs, log, ... for standard types
 #include <type_traits>
+
+// We need a version of eigen where the constant PI in kissFFT has
+// been fixed and has full precision, like:
+// git clone --depth 1 --branch 5.0.1 https://gitlab.com/libeigen/eigen.git eigen
 #include <Eigen/Core>
 
 // arbitrary precision and intervals
@@ -855,7 +859,7 @@ void LSV<PREC>::compute_ellipses() {
     rho_B_ = bmp::upper(rho_B_);
 
     // C+
-    rho_C_plus_ = exp(0.8 * log(rho_max) + 0.2 * log(rho_C_));
+    rho_C_plus_ = exp((4 * log(rho_max) + 1 * log(rho_C_)) / 5);
     rho_C_plus_ = bmp::lower(rho_C_plus_);
 
     // B+
