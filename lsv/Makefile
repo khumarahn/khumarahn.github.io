@@ -1,17 +1,35 @@
 # things we need to build the code
 LL = -I../external/eigen -Wall -std=c++23 -lgmp -lmpfr -lmpfi -fopenmp
-# debug and safety checks (although these make the program slooooooooow...........)
+# debug and safety checks
 #DD = -g -fsanitize=address,leak,undefined
-# this is fassssster
 DD = -g -fsanitize=undefined
-# this is for profiling
-#DD = -g -fno-omit-frame-pointer
 
 .PHONY test::
 	clang++ $(LL) $(DD) -O3 -march=native lsv-test.cpp -o lsv-test.x
 
-.PHONY web::
-	em++ -O2 -std=c++23 -flto -msimd128 \
+WASM_OPT = -O3 -flto
+GMP_LIB  = ../external/gmp/wasm-build/lib/libgmp.a
+MPFR_LIB = ../external/mpfr/wasm-build/lib/libmpfr.a
+MPFI_LIB = ../external/mpfi/wasm-build/lib/libmpfi.a
+
+$(GMP_LIB):
+	cd ../external/gmp && \
+	emconfigure ./configure --disable-assembly --host=none --enable-cxx --prefix=$$(pwd)/wasm-build CFLAGS="$(WASM_OPT)" CXXFLAGS="$(WASM_OPT)" && \
+	emmake make -j$$(nproc) && emmake make install
+
+$(MPFR_LIB): $(GMP_LIB)
+	cd ../external/mpfr && \
+	emconfigure ./configure --host=none --with-gmp=$$(pwd)/../gmp/wasm-build --prefix=$$(pwd)/wasm-build CFLAGS="$(WASM_OPT)" CXXFLAGS="$(WASM_OPT)" && \
+	emmake make -j$$(nproc) && emmake make install
+
+$(MPFI_LIB): $(MPFR_LIB)
+	cd ../external/mpfi && \
+	emconfigure ./configure --host=none --with-gmp=$$(pwd)/../gmp/wasm-build --with-mpfr=$$(pwd)/../mpfr/wasm-build --prefix=$$(pwd)/wasm-build CFLAGS="$(WASM_OPT)" CXXFLAGS="$(WASM_OPT)" && \
+	emmake make -j$$(nproc) && emmake make install
+
+# Note: web target now depends on the three library files and uses -O3
+.PHONY web:: $(GMP_LIB) $(MPFR_LIB) $(MPFI_LIB)
+	em++ -O3 -std=c++23 -flto -msimd128 \
 		-Wall -Wno-deprecated-declarations \
 		-lembind \
 		-I../external/eigen \
@@ -19,9 +37,9 @@ DD = -g -fsanitize=undefined
 		-I../external/mpfr/wasm-build/include \
 		-I../external/mpfi/wasm-build/include \
 		lsv.cpp \
-		../external/mpfi/wasm-build/lib/libmpfi.a \
-		../external/mpfr/wasm-build/lib/libmpfr.a \
-		../external/gmp/wasm-build/lib/libgmp.a \
+		$(MPFI_LIB) \
+		$(MPFR_LIB) \
+		$(GMP_LIB) \
 		-o lsv-cpp.js \
 		-s USE_BOOST_HEADERS=1 \
 		-s ALLOW_MEMORY_GROWTH=1 -s STACK_SIZE=67108864
