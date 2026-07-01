@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script src="https://cdn.plot.ly/plotly-3.6.0.min.js" charset="utf-8"></script>
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        <style>
+        body {
+            margin: auto;
+            max-width: 48em;
+        }
+        </style>
+    </head>
+
+    <body>
+        <h3>Intermittent map</h3>
+        <div>
+            Consider the standard Liverani-Saussol-Vaienti map \(T \colon [0,1] \to [0,1]\) with parameter \(\alpha &gt; 0\):
+            \[
+                T \colon x \mapsto
+                \begin{cases}
+                    x (1 + 2^{1 / \alpha} x^{1 / \alpha}), &amp; x &lt; 0.5 \\
+                    2 (x - 1), &amp; x &gt; 0.5
+                \end{cases}
+            \]
+        </div>
+        <div id='lsv'></div>
+        <div style="width: 75%;margin: auto;">
+            \(\alpha\): <span id="alphaValue"></span>
+            <br>
+            <input id="alphaSlider" style="width:100%" type="range" min="16" max="256" value="48"
+            class="slider" onchange="alphaChange();" oninput="alphaInput();">
+        </div>
+
+        <h3>Iterates of the transfer operator</h3>
+        Let \(L\) be the transfer operator with respect to the Lebesgue measure:
+        \[
+            (L v)(x) = \sum_{y \in T^{-1} x} \frac{v(y)}{T'(y)}
+        \]
+        We are interested in the iterates \(L^n v\) for functions \(v\) with \(\|v - 1\|_{C^1}\) small.
+        Choose such a \(v\) and using the above formula compute \(L^n v\):
+        <div id='Ln'></div>
+        <div style="width:75%;margin:auto;margin-bottom:1em">
+            \(v(x)\): <input type="text" id="v" style="width:75%" value="1 + 0.05 * Math.sin(6*Math.PI*x)" />
+            <input type="button" onclick="alphaChange();" value="Set" />
+        </div>
+        <div>
+            Such a computation is utmost inefficient: we cannot compute much more than 10 iterates.
+            But it gives an idea.
+        </div>
+        <div>
+            We would like to prove that \(L^n v\) is monotone near \(1\) in the sense that
+            for some \(\delta &gt; 0\), for each \(x \in [1 - \delta, 0]\),
+            \[
+                (L^{n+1}v)(x) \leq (L^n v)(x)
+                \quad \text{for all } n \geq 0
+            \]
+            But how?
+        </div>
+
+
+        <h3>Density and derivatives</h3>
+        <div>
+            Here we plot an approximation of the invariant density \(h\) normalized so that \(\int_{1/2}^1 h(x) \, dx = 1\).
+            The invariant density is hard to approximate naively, so we use a precise (and very delicate!) algorithm
+            by Caroline Wormell <a href="https://arxiv.org/abs/2106.01498">arXiv:2106.01498</a> ported to C++.
+            Our <a href="https://github.com/khumarahn/khumarahn.github.io/tree/main/demo/caro">implementation</a>
+            is not using rigorous numerics, but the expected accuracy is roughly 15 decimal digits.
+            (This is the expected accuracy on \([1/2,1]\); near zero the accuracy is worse.)
+        </div>
+        <div id='hn'></div>
+
+        <h3>Two conditions</h3>
+        <div> Let \(h\) denote the density of the invariant measure and let \(w = 1 / T'\).
+            For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of \(x\) under \(T\).
+            Suppose that for each \(x\):
+            \[
+                \Bigl[ \frac{h'}{h} w + w' \Bigr](y_1)
+                \leq \Bigl[ \frac{h'}{h} w + w' \Bigr](y_2)
+                \tag{C1}
+            \]
+            and
+            \[
+                \Bigl[ \frac{h''}{h} w^2 + 3 \frac{h'}{h} w' w + w'' w + (w')^2 \Bigr](y_1)
+                \geq \Bigl[ \frac{h''}{h} w^2 + 3 \frac{h'}{h} w' w + w'' w + (w')^2 \Bigr](y_2)
+                .
+                \tag{C2}
+            \]
+        </div>
+        <div>
+            If the conditions above are satisfied, then there is an argument (which has to be checked!) that
+            the cone of positive functions
+            \[
+                \Bigl\{
+                v : \frac{v'}{v} \geq \frac{h'}{h}
+                \quad \text{and} \quad
+                \frac{v''}{v} \leq \frac{h''}{h}
+                \Bigr\}
+            \]
+            is invariant under iterations of \(L\).
+            Further, there exists a \(\delta &gt; 0\) such that 
+            \( (L v)(x) \leq v(x) \)
+            for all such \(v\) and \(x \in [1 - \delta, 1]\).
+        </div>
+        <div>
+            It is not clear however how to verify these conditions. But we can compute an approximation for \(h\) and plot some graphs.
+            Below C1 and C2 are the differences of the two sides in corresponding conditions, taken so that positive values
+            mean that the condition holds.
+        </div>
+        <div id='ccc'></div>
+
+        <h3>Appendix 1: Asymptotics of \(h'\) and \(h''\) near zero</h3>
+        <div>
+            These are the normalized plots of \(h' / h\) and \(h'' / h\),
+            which near \(x = 0\) should behave like \(1/x\) and \(1/x^2\) respectively:
+        </div>
+        <div id='hph'></div>
+
+        <h3>Appendix 3: Sanity check</h3>
+        <div>
+            There are two basic ways to check sanity of the calculation of \(h\):
+            <ul>
+                <li>
+                    The leading eigenvalue of \(R\) should be equal to 1. We got \(1 + \varepsilon\) where
+                    <span id='lambda_error'></span>.
+                </li>
+                <li>
+                    \(\frac{h(1/2)}{h(1)}\) should be equal to \(\frac{2 + \alpha^{-1}}{2}\). Our error here is
+                    <span id='h12_error'></span>.
+                </li>
+            </ul>
+        </div>
+        <h3>Appendix 4: Simplified conditions</h3>
+        <div> The conditions above can be written in a different way,
+            which seems simpler to verify numerically. Here we use that the second branch is exactly
+            \(2x - 1\). As before, let \(h\) denote the density of the invariant measure and let
+            \(w = 1 / T'\). For \( x \in [0,1] \) let \( y_1 &lt; y_2 \) denote the two preimages of
+            \(x\) under \(T\). Then (C1) is equivalent to:
+            \[
+                \frac{h'(x)}{h(x)}
+                \leq \frac{1}{2} \frac{h'(y_2)}{h(y_2)}
+                \tag{C'1}
+                ,
+            \]
+            (C2) is equivalent to
+            \[
+                \frac{h''(x)}{h(x)}
+                \geq \frac{1}{4} \frac{h''(y_2)}{h(y_2)}
+                \tag{C'2}
+                .
+            \]
+        </div>
+
+        <script src="lsv.js"></script>
+        <script src="lsv-graph.js"></script>
+    </body>
+</html>

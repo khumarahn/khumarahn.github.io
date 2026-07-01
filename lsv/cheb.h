@@ -1,0 +1,289 @@
+#pragma once
+
+#include <cmath> // for sin and atan for standard types
+#include <complex>
+#include <type_traits>
+#include <unsupported/Eigen/FFT>
+#include <cassert>
+#include <functional>
+
+namespace cheb_ns {
+
+using std::atan;
+using std::cos;
+using std::acos;
+using std::asin;
+using std::pow;
+using std::sqrt;
+
+template <typename T, typename... TArgs>
+concept type_one_of = (std::same_as<T, TArgs> || ...);
+
+// A home made class for Chebyshev approximation, based on Numerical Recipes.
+//
+// For x \in [a, b], the value is
+//     f(x) = coef(0) * T_0(y) / 2 + coef(1) * T_1(y) + ... + coef(N-1) * T_{N-1}(y),
+// where y = 2 * (x - a) / (b - a) - 1 \in [-1, 1],
+// and T_0, T_1, ..., T_{N-1} are the Chebyshev polynomials of first kind.
+template <typename real_t>
+class Cheb {
+    public:
+        using complex_t = std::complex<real_t>;
+
+        template <typename var_t>
+            using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
+
+        using VectorXr = VectorX<real_t>;
+        using VectorXc = VectorX<complex_t>;
+
+
+    private:
+        static const real_t pi_;
+        static const real_t half_;
+
+        int N_;
+        real_t a_, b_;
+        VectorXr coef_;
+
+        // precomputed things
+        real_t bpa_, bpa2_, bma_, bmai_, bma2_, bma2i_, Ni_;
+        void set_abN(const real_t &a, const real_t &b, int N) {
+            a_ = a;
+            b_ = b;
+            N_ = N;
+            assert ( N_ > 0 && a_ < b_);
+
+            bpa_ = b_ + a_;
+            bpa2_ = bpa_ / 2;
+            bma_ = b_ - a_;
+            bmai_ = 1 / bma_;
+            bma2_ = bma_ / 2;
+            bma2i_ = 1 / bma2_;
+            Ni_ = real_t(1) / real_t(N_);
+        };
+    public:
+        Cheb() {};
+        Cheb(const std::function<real_t (real_t)> &f, const real_t &a, const real_t &b, int N) {
+            set_abN(a, b, N);
+
+            // compute a vector of values of f
+            VectorXr f_val(N_);
+            for (int k = 0; k < N_; k++)
+                f_val(k) = f(cos(pi_ * (k + half_) * Ni_) * bma2_ + bpa2_);
+
+            set_from_values(f_val);
+        };
+        Cheb(const VectorXr &coef, const real_t &a, const real_t &b) {
+            set_abN(a, b, int(coef.size()));
+            coef_ = coef;
+        };
+        Cheb(const real_t &a, const real_t &b, int N) {
+            set_abN(a, b, N);
+        };
+
+        VectorXr coef() const {
+            return coef_.size() == 0 ? VectorXr::Zero(N_) : coef_;
+        };
+        real_t coef(int n) const {
+            return (n < coef_.size()) ? coef_(n) : real_t(0);
+        }
+        real_t a() const {return a_; };
+        real_t b() const {return b_; };
+        int N() const { return N_; };
+
+        VectorXr nodes() const {
+            VectorXr no;
+            no.resize(N_);
+            for (int k = 0; k < N_; k++)
+                no(k) = cos(pi_ * (k + half_) * Ni_) * bma2_ + bpa2_;
+            return no;
+        }
+
+        void set_from_values(const VectorXr &values) {
+            assert(values.size() == N_);
+
+            coef_ = kissDCT2(values) * 2 * Ni_;
+        }
+
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        var_t value(const var_t &x) const {
+            // Clenshaw recurrence
+            var_t d(0),
+                  dd(0),
+                  y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_),
+                  y2 = var_t(2) * y;
+            for (int j = N_ - 1; j > 0; j--) {
+                var_t sv = d;
+                d = y2 * d - dd + coef_(j);
+                dd = sv;
+            }
+            return y * d - dd + coef_(0) / var_t(2);
+        }
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        var_t operator()(const var_t &x) const {
+            return value(x);
+        }
+
+        // A trigonometric computation of values of basis vectors,
+        // does not work on real line outside [-1,1]
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        VectorX<var_t> basis_values_trig(const var_t &x, int N) const {
+            VectorX<var_t> ret(N);
+            ret(0) = half_;
+            const var_t y = (x - bpa2_) / bma2_,
+                  z = acos(y);
+            for (int j = 1; j < N; j++) {
+                ret(j) = cos(real_t(j) * z);
+            }
+            return ret;
+        }
+        // optimized computation of value when coef = (0,...,0,1,0,...,0),
+        // with 1 at index n
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        var_t basis_value(const var_t &x, int n) const {
+            // Clenshaw recurrence
+            var_t d((n > 0) ? 1 : 0),
+                  dd(0),
+                  y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_),
+                  y2 = var_t(2) * y;
+            for (int j = n - 1; j > 0; j--) {
+                var_t sv = d;
+                d = y2 * d - dd;
+                dd = sv;
+            }
+            return y * d - dd + ((n == 0) ? half_ : var_t(0));
+        }
+        // optimized computation of value at first N basis vectors
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        VectorX<var_t> basis_values(const var_t &x, int N) const {
+            VectorX<var_t> ret = VectorX<var_t>::Zero(N);
+            ret(0) = half_;
+            // Clenshaw recurrence
+            var_t d(1), dd(0),
+                  y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_);
+            for (int j = 1; j < N; j++) {
+                var_t sv = d, tt = y * d;
+                ret(j) = tt - dd;
+                d = ret(j) + tt;
+                dd = sv;
+            }
+            return ret;
+        }
+
+        Cheb derivative() const {
+            VectorXr d_coef = VectorXr::Zero(N_ > 1 ? (N_ - 1) : 1);
+            if (N_ > 1)
+                d_coef(N_ - 2) = 2 * (N_ - 1) * coef_(N_ - 1);
+            if (N_ > 2)
+                d_coef(N_ - 3) = 2 * (N_ - 2) * coef_(N_ - 2);
+            for (int j = N_ - 3; j > 0; j--)
+                d_coef(j - 1) = d_coef(j + 1) + 2 * j * coef_(j);
+
+            d_coef *= bma2i_;
+
+            Cheb r(d_coef, a_, b_);
+            return r;
+        }
+        Cheb integral() const {
+            real_t sum = 0, fac = 1, con = (b_ - a_) / 4;
+            VectorXr cint(N_ + 1);
+            for (int j = 1; j < N_ - 1; j++) {
+                cint[j] = con * (coef_[j - 1] - coef_[j + 1]) / j;
+                sum += fac * cint[j];
+                fac = -fac;
+            }
+            // two last coefficients where there is no coef_[j+1]
+            for (int j = N_ > 1 ? (N_ - 1) : 1; j <= N_; j++) {
+                cint[j] = con * coef_[j - 1] / j;
+                sum += fac * cint[j];
+                fac = -fac;
+            }
+            cint[0] = 2 * sum;
+            return Cheb(cint, a_, b_);
+        }
+
+        // For x \in [a,b] and \beta > -1, compute
+        //     \int_a^x (t - a)^\beta basis_values(t) dt
+        VectorXr beta_integral(const real_t &beta, const real_t &x, int N) const {
+            assert(beta > real_t(-1));
+            assert(N > 0);
+
+            const real_t y = (2 * x - bpa_) * bmai_,
+                  y1b1 = pow(y + 1, beta + 1);
+            const VectorXr bv = basis_values_trig(x, N);
+
+            VectorXr I(N);
+            I(0) = y1b1 / (beta + 1);
+            if (N > 1)
+                I(1) = y1b1 * (y + 1) / (beta + 2) - I(0);
+            for (int j = 2; j < N; j++)
+                I(j) = (
+                        I(j - 1) * 2 * beta
+                        + I(j - 2) * (-beta + j - 3)
+                        - bv(j - 1) * 2 * (1 - y) * y1b1
+                       ) / (beta + j + 1);
+
+            I(0) /= 2;
+            I *= pow(bma2_, beta + 1);
+            return I;
+        }
+
+        // An upper bound on the sup norm in a Bernstein ellipse with parameter rho,
+        // scaled to have the foci at a and b
+        real_t ellipse_norm(const real_t &rho) const {
+            int N = coef_.size();
+            if (N == 0) return 0;
+            // major semi-axes
+            real_t M = (rho + 1 / rho) / 4 * (b_ - a_);
+            // left point
+            real_t x = (a_ + b_) / 2 - M;
+
+            real_t r = abs(coef_(0)) / 2;
+            for (int k = 1; k < N; k++)
+                r += abs(coef_(k)) * (pow(rho, k) + pow(rho, -k)) / 2;
+
+            return r;
+        }
+
+        // discrete cosine transform type 2: eigen's kissfft
+        // and a reference naive implementation
+        static VectorXr kissDCT2(const VectorXr &v) {
+            long N = v.size();
+            VectorXr vd = VectorXr::Zero(4 * N);
+            for (long i = 0; i < N; i++) {
+                vd(2 * i + 1) = v(i);
+                vd(4 * N - 2 * i - 1) = v(i);
+            }
+
+            VectorXc rc;
+
+            Eigen::FFT<real_t> fft;
+            fft.fwd(rc, vd);
+
+            VectorXr r(N);
+            for (long i = 0; i < N; i++) {
+                r(i) = std::real(rc(i)) / 2;
+            }
+
+            return r;
+        }
+        static VectorXr naiveDCT2(const VectorXr &v) {
+            int N = int(v.size());
+            real_t Ni = real_t(1) / real_t(N);
+            VectorXr r(N);
+            for (int k = 0; k < N; k++) {
+                r(k) = 0;
+                for (int n = 0; n < N; n++) {
+                    r(k) += v(n) * cos(pi_ * (n + half_) * k * Ni);
+                }
+            }
+            return r;
+        }
+}; // class Cheb
+
+template <typename real_t>
+const real_t Cheb<real_t>::pi_ = 4 * atan(real_t(1));
+template <typename real_t>
+const real_t Cheb<real_t>::half_ = real_t(1) / 2;
+
+} // namespace cheb_ns

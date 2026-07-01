@@ -1,3 +1,15 @@
 [submodule "hardballs"]
 	path = hardballs
 	url = https://git.code.sf.net/p/hardballs/git
+[submodule "external/gmp"]
+	path = external/gmp
+	url = https://github.com/gmp-mirror/gmp
+[submodule "external/mpfi"]
+	path = external/mpfi
+	url = https://gitlab.inria.fr/mpfi/mpfi.git
+[submodule "external/mpfr"]
+	path = external/mpfr
+	url = https://gitlab.inria.fr/mpfr/mpfr.git
+[submodule "external/eigen"]
+	path = external/eigen
+	url = https://gitlab.com/libeigen/eigen
