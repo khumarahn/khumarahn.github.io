@@ -31,6 +31,10 @@ class LSV : public BaseLSV {
                    F1_minus_, F2_minus_, F3_minus_,
                    F1_plus_, F2_plus_, F3_plus_;
 
+        // lower bound on (h'/h)' and upper bound on (h''/h)'
+        interval_t min_hp_h_prime_,
+                   max_hpp_h_prime_;
+
         // step counter so that we don't miss something
         int computation_step_;
 
@@ -131,6 +135,15 @@ class LSV : public BaseLSV {
 
         double double_gamma() const {
             return double(bmp::median(BaseLSV::gamma()));
+        }
+        double double_alpha() const {
+            return double(bmp::median(1 / BaseLSV::gamma()));
+        }
+        double double_min_hp_h_prime() {
+            return double(LOWER(min_hp_h_prime_));
+        }
+        double double_max_hpp_h_prime() {
+            return double(UPPER(max_hpp_h_prime_));
         }
 
         // derivatives of f(x) = x (1 + 2^gamma x^gamma)
@@ -434,17 +447,13 @@ void LSV::compute_derivative_bounds() {
 
     std::cout << "  ... done. h'''(x) <= " << min_hp3 << " ∎\n";
 
-    // lower bound (h'/h)' and upper bound (h''/h)'
-    interval_t min_hp_h_prime,
-               max_hpp_h_prime;
-
     {
         // start with a bound on (0, x_star]
         interval_t B1 = F2_minus_ - pow(F1_plus_, 2);
-        min_hp_h_prime = LOWER(B1 / pow(x_star_, 2));
+        min_hp_h_prime_ = LOWER(B1 / pow(x_star_, 2));
 
         interval_t B2 = F3_minus_ - F2_plus_ * F1_plus_;
-        max_hpp_h_prime = UPPER(-B2 / pow(x_star_, 3));
+        max_hpp_h_prime_ = UPPER(-B2 / pow(x_star_, 3));
 
         // do [x_star, 1], iterating over [P[k+1], P[k]]
         for (int k = 0; k <= P_bound - 1; k++) {
@@ -494,20 +503,20 @@ void LSV::compute_derivative_bounds() {
             //    << "  c0: " << c0 << ", c2: " << c2 << ", c3: " << c3 << "\n"
             //    << "  M1: " << M1 << ", M2: " << M2 << "\n";
 
-            min_hp_h_prime = min(min_hp_h_prime, pq_hp_h_prime);
-            max_hpp_h_prime = max(max_hpp_h_prime, pq_hpp_h_prime);
+            min_hp_h_prime_  = min(min_hp_h_prime_,  pq_hp_h_prime);
+            max_hpp_h_prime_ = max(max_hpp_h_prime_, pq_hpp_h_prime);
         }
     }
 
     std::cout << "\nTheorem. On (0,1]:\n"
-        << "  (h'/h)' >= " << min_hp_h_prime << "\n"
-        << "  (h''/h)' <= " << max_hpp_h_prime << "\n";
+        << "  (h'/h)' >= " << min_hp_h_prime_ << "\n"
+        << "  (h''/h)' <= " << max_hpp_h_prime_ << "\n";
 
     std::cout << "\nSanity check:\n"
         << "  (h'/h)'(1): " << Hp2(1) / H(1) - pow(Hp1(1) / H(1), 2) << "\n"
         << "  (h''/h)'(1): " << Hp3(1) / H(1) - Hp1(1) * Hp2(1) / pow(H(1), 2) << "\n";
 
-    assert(min_hp_h_prime > 0 && max_hpp_h_prime < 0);
+    assert(min_hp_h_prime_ > 0 && max_hpp_h_prime_ < 0);
 
 } // derivative bounds
 

@@ -20,7 +20,10 @@ function runOrders() {
         lsv_cpp.compute_derivative_bounds();
 
         postMessage({
-            gamma: lsv_cpp.double_gamma()
+            gamma:              lsv_cpp.double_gamma(),
+            alpha:              lsv_cpp.double_alpha(),
+            min_hp_h_prime:     lsv_cpp.double_min_hp_h_prime(),
+            max_hpp_h_prime:    lsv_cpp.double_max_hpp_h_prime()
         });
     }
 
