@@ -36,12 +36,14 @@ jobs:
         run: sudo apt-get install -y -q libeigen3-dev
       - name: install boost
         run: sudo apt-get install -y -q libboost-all-dev
+      - name: install build dependencies
+        run: sudo apt-get install -y -q autoconf automake libtool texinfo
       - name: Checkout
         uses: actions/checkout@v4
         with: 
           submodules: recursive
       - name: Setup emscripten
-        uses: mymindstorm/setup-emsdk@v14
+        uses: mymindstorm/setup-emsdk@v16
       - name: make
         run: make
       - name: Setup Pages

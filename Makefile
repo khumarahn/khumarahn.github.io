@@ -3,3 +3,4 @@
 	$(MAKE) -C demo
 	$(MAKE) -C bb
 	$(MAKE) -C shear-flow
+	$(MAKE) -C lsv

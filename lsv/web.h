@@ -1,5 +1,8 @@
 // black magic which we need when compiling for the web
 
+// bug in boost
+#define variable_precision_optionss variable_precision_options
+
 #include <iostream>
 
 namespace std {
