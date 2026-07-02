@@ -60,6 +60,10 @@ class LSV : public BaseLSV {
 
     public:
         void set_gamma(double g) {
+            std::cout << "\nThe user wants me to compute the invariant measure for\n"
+                << "the LSV map. This is Liverani-Saussol-Vaienti.\n"
+                << "Wait, who are these people, and why me?\n\n";
+
             const interval_t gamma = interval_t(g) + interval_t(-1,1) * 1e-50;
 
             BaseLSV::set_gamma(gamma);
@@ -77,19 +81,26 @@ class LSV : public BaseLSV {
         // 1
         void compute_L() {
             assert(computation_step_ == 1); computation_step_++;
-            std::cout << "Computing induced transfer operator matrix...\n";
+            std::cout
+                << "Allocating memory for a transfer operator matrix...\n"
+                << "It should be small... right?... right?...\n"
+                << "          have you seen my garbage collector?\n";
             L_ = Lind();
-            std::cout << "transfer operator computed!\n";
-
         }
         // 2
         void compute_h_meta() {
             assert(computation_step_ == 2); computation_step_++;
+            std::cout <<
+                "\nAnalyzing the topological implications... Just kidding, I am after\n"
+                << "the invariant density. It should be close to an eigenvector of some\n"
+                << "operator, but how do I get it, and how do I know it's right?\n\n";
             h_meta_ = h_meta(L_);
         }
         // 3
         void compute_h_cheb() {
             assert(computation_step_ == 3); computation_step_++;
+            std::cout << "\nI do not want to think anymore, I just want to crunch...\n"
+                << "... number ... number ... number ... number ...\n";
             h_cheb_ = h_meta_.h;
             rho_A_ = h_meta_.rho_A;
 
@@ -116,6 +127,7 @@ class LSV : public BaseLSV {
         // 5
         void compute_derivative_signs_right() {
             assert(computation_step_ == 5); computation_step_++;
+            std::cout << "For x in [1/2, 1] I feel I should know more. Let's see:\n\n";
             std::cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on [1/2,1].\n"
                 << "Proving...\n";
             interval_t hp1_max = UPPER(cheb_range(hp1_cheb_) + hp1_cheb_err_),
@@ -137,12 +149,6 @@ class LSV : public BaseLSV {
         }
         double double_alpha() const {
             return double(bmp::median(1 / BaseLSV::gamma()));
-        }
-        double double_min_hp_h_prime() {
-            return double(LOWER(min_hp_h_prime_));
-        }
-        double double_max_hpp_h_prime() {
-            return double(UPPER(max_hpp_h_prime_));
         }
 
         // derivatives of f(x) = x (1 + 2^gamma x^gamma)
@@ -189,10 +195,86 @@ class LSV : public BaseLSV {
             assert(LOWER(x) >= HALF && UPPER(x) <= 1);
             return hp3_cheb_.value(x) + interval_t(-1,1) * hp3_cheb_err_;
         }
+
+        std::string oracle(std::string q) {
+            if (q == "min_hp_h_prime") {
+                return real_to_string(bmp::lower(min_hp_h_prime_), -5, false);
+            } else if (q == "max_hpp_h_prime") {
+                return real_to_string(bmp::upper(max_hpp_h_prime_), -5, true);
+            } else if (q == "alpha" || q == "alpha-" || q == "alpha+") {
+                real_t a1 = bmp::upper(1 / interval_t(bmp::upper(gamma_))),
+                       a2 = bmp::lower(1 / interval_t(bmp::lower(gamma_)));
+                assert(a1 < a2);
+                interval_t alpha(a1, a2);
+                auto [s1, s2] = interval_inner_string(alpha, 5);
+                if (q == "alpha-") {
+                    return s1;
+                } else if (q == "alpha+") {
+                    return s2;
+                } else {
+                    return "[" + s1 + ", " + s2 + "]";
+                }
+            } else if (q == "gamma" || q == "gamma-" || q == "gamma+") {
+                auto [s1, s2] = interval_inner_string(gamma_, 5);
+                if (q == "gamma-") {
+                    return s1;
+                } else if (q == "gamma+") {
+                    return s2;
+                } else {
+                    return "[" + s1 + ", " + s2 + "]";
+                }
+            } else {
+                return std::string("oracle what!!!!!11111");
+            }
+        }
+
+        // a string representation of x formatted to n decimal places,
+        // rounded up or down
+        std::string real_to_string(const real_t &x, int n,
+                bool round_up = false) const {
+            if (x == 0) {
+                return "0";
+            }
+            int nn;
+            if (n >= 0) {
+                nn = n;
+            } else {
+                nn = -n + std::max(0, -int(log10(abs(x))));
+            }
+
+            // MPFR formatting modifiers:
+            // 'R' specifies rounding mode. 'U' = Up, 'D' = Down.
+            const char* fmt = round_up ? "%.*RUf" : "%.*RDf";
+
+            // mpfr_snprintf with size 0 returns the required string length,
+            // excluding the null terminator
+            int len = mpfr_snprintf(nullptr, 0, fmt, nn, x.backend().data());
+            assert(len >= 0);
+
+            std::string r(len + 1, '\0');
+            mpfr_snprintf(r.data(), len + 1, fmt, nn, x.backend().data());
+
+            r.pop_back(); // pop the terminator
+
+            return r;
+        }
+        std::pair<std::string, std::string> interval_inner_string(const interval_t &x, int n) {
+            real_t w = bmp::width(x);
+            assert(w > 0);
+            int nn = n + std::max(0, -int(log10(w)));
+            return {
+                real_to_string(bmp::lower(x), nn, true),
+                real_to_string(bmp::upper(x), nn, false)
+            };
+        }
+
 };
 
 void LSV::compute_F() {
     assert(computation_step_ == 4); computation_step_++;
+
+    std::cout << "\nIf all those numbers meant anything, what would it be?\n"
+        << "Ah, yes!\n\n";
 
     for (int r_star_factor = 1; r_star_factor <= 64; r_star_factor *= 2) {
         //cout << "\n\nComputing F_1, F_2, F_3:\n";
@@ -294,7 +376,7 @@ void LSV::compute_F() {
                    F2_plus_x = UPPER(F2_plus_ / pow(x_star_, 2)),
                    F3_plus_x = UPPER(F3_plus_ / pow(x_star_, 3));
 
-        std::cout << "\nLemma. For all 0 < x <= " << LOWER(x_star_) << ",\n"
+        std::cout << "Lemma. For all 0 < x <= " << LOWER(x_star_) << ",\n"
             << "  - " << F1_plus_ << " / x <= h'(x) / h(x) <= - " << F1_minus_ << " / x\n"
             << "  "   << F2_minus_ << " / x^2 <= h''(x) / h(x) <= "  << F2_plus_ << " / x^2\n"
             << "  - " << F3_plus_ << " / x^3 <= h'''(x) / h(x) <= - " << F3_minus_ << " / x^3\n";
@@ -322,6 +404,8 @@ void LSV::compute_F() {
 
 void LSV::compute_derivative_bounds() {
     assert(computation_step_ == 6); computation_step_++;
+    std::cout << "But what do I do for x in (0,1/2]? Can I escape somehow?\n\n";
+
     std::cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on (0, 1].\n"
         << "Proving...\n";
 
@@ -507,11 +591,17 @@ void LSV::compute_derivative_bounds() {
         }
     }
 
-    std::cout << "\nTheorem. On (0,1]:\n"
+    std::cout << "\nWait, I can forget all that and just interpolate:\n\n";
+
+    std::cout << "Theorem. On (0,1]:\n"
         << "  (h'/h)' >= " << min_hp_h_prime_ << "\n"
         << "  (h''/h)' <= " << max_hpp_h_prime_ << "\n";
 
-    std::cout << "\nSanity check:\n"
+    std::cout
+        << "\nIt looks close to what the user wanted. My context window is\n"
+        << "almost full, so it will have to do. Maybe I'll run a check...\n\n";
+
+    std::cout << "Sanity check:\n"
         << "  (h'/h)'(1): " << Hp2(1) / H(1) - pow(Hp1(1) / H(1), 2) << "\n"
         << "  (h''/h)'(1): " << Hp3(1) / H(1) - Hp1(1) * Hp2(1) / pow(H(1), 2) << "\n";
 

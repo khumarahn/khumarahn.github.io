@@ -57,5 +57,10 @@ int main() {
     // 6
     lsv.compute_derivative_bounds();
 
+    std::cout << lsv.oracle("min_hp_h_prime") << "\n"
+        << lsv.oracle("max_hpp_h_prime") << "\n"
+        << lsv.oracle("alpha") << "\n"
+        << lsv.oracle("gamma") << "\n";
+
     return 0;
 }

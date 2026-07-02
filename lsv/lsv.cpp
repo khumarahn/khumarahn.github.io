@@ -1,6 +1,8 @@
 #define NDEBUG // disable Eigen's range checking, asserts and other good things
 
 #include <iostream>
+#include <string>
+#include <stdexcept>
 
 #include "web.h"
 
@@ -22,8 +24,7 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .function("compute_F", &LSV::compute_F)
         .function("compute_derivative_signs_right", &LSV::compute_derivative_signs_right)
         .function("compute_derivative_bounds", &LSV::compute_derivative_bounds)
-        .function("double_min_hp_h_prime", &LSV::double_min_hp_h_prime)
-        .function("double_max_hpp_h_prime", &LSV::double_max_hpp_h_prime)
+        .function("oracle", &LSV::oracle)
         .function("double_gamma", &LSV::double_gamma)
         .function("double_alpha", &LSV::double_alpha);
 }

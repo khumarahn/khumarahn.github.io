@@ -40,10 +40,14 @@ function runOrders() {
 
             postMessage({
                 type:               'bounds',
-                gamma:              lsv_cpp.double_gamma(),
-                alpha:              lsv_cpp.double_alpha(),
-                min_hp_h_prime:     lsv_cpp.double_min_hp_h_prime(),
-                max_hpp_h_prime:    lsv_cpp.double_max_hpp_h_prime()
+                gamma:              lsv_cpp.oracle("gamma"),
+                gamma_minus:        lsv_cpp.oracle("gamma-"),
+                gamma_plus:         lsv_cpp.oracle("gamma+"),
+                alpha:              lsv_cpp.oracle("alpha"),
+                alpha_minus:        lsv_cpp.oracle("alpha-"),
+                alpha_plus:         lsv_cpp.oracle("alpha+"),
+                min_hp_h_prime:     lsv_cpp.oracle("min_hp_h_prime"),
+                max_hpp_h_prime:    lsv_cpp.oracle("max_hpp_h_prime")
             });
         } else {
             console.log('worker: unknown order ', e);

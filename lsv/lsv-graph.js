@@ -39,7 +39,8 @@ function alphaChange() {
         document.getElementById('theorem-btn').addEventListener('click', function(e) {
             e.preventDefault(); // no page jump
 
-            document.getElementById('theorem-control').innerHTML = `<span>Computing bounds for \\(\\alpha=${alpha}\\)...</span>`;
+            document.getElementById('theorem-control').innerHTML =
+                `<span>Computing bounds for \\(\\alpha \\approx ${alpha}\\)...</span>`;
 
             document.getElementById('reasoning-log').textContent += '\n\n';
             document.getElementById('reasoning-summary').textContent = 'Reasoning...';
@@ -56,7 +57,7 @@ function alphaChange() {
 
 function alphaInput() {
     let a = 0.5 + document.getElementById("alphaSlider").value / 256;
-    document.getElementById("alphaValue").innerHTML = a.toFixed(4);
+    document.getElementById("alphaValue").innerHTML = `${a}`;
     return a;
 }
 
@@ -75,8 +76,13 @@ worker.onmessage = function(e) {
 
         let thm = String.raw`
         <div>
-        For \( \alpha \approx ::alpha:: \), the invariant density \(h(x)\)
-        on \((0, 1]\) satisfies:
+        For
+        \begin{align*}
+            \alpha \in [
+            & ::alpha_minus:: , \\
+            & ::alpha_plus:: ],
+        \end{align*}
+        \(h(x)\) on \((0, 1]\) satisfies:
         \[
             \Bigl( \frac{h'}{h} \Bigr)' \geq ::hp::
             \quad \text{and} \quad
@@ -86,9 +92,11 @@ worker.onmessage = function(e) {
         </div>
        `;
 
-        thm = thm.replaceAll('::alpha::', m.alpha.toFixed(6))
-            .replaceAll('::hp::', m.min_hp_h_prime.toFixed(6))
-            .replaceAll('::hpp::', m.max_hpp_h_prime.toFixed(6));
+        console.log("huj", m.alpha_minus);
+        thm = thm.replaceAll('::alpha_minus::', m.alpha_minus)
+            .replaceAll('::alpha_plus::', m.alpha_plus)
+            .replaceAll('::hp::', m.min_hp_h_prime)
+            .replaceAll('::hpp::', m.max_hpp_h_prime);
 
         document.getElementById("theorem-text").innerHTML += thm;
 
@@ -105,6 +113,13 @@ function startup() {
     if (!(window.MathJax && window.Plotly)) {
         setTimeout(startup, 1000);
         return;
+    }
+
+    // check wasm64 support
+    try {
+        new WebAssembly.Memory({ address: 'i64', initial: 1n });
+    } catch (error) {
+        alert("Wasm64 is not supported. Please use a different browser...");
     }
 
     alphaChange();
