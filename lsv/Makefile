@@ -40,7 +40,8 @@ lsv-cpp.js: Makefile *.cpp *.h $(GMP_LIB) $(MPFR_LIB) $(MPFI_LIB)
 		$(GMP_LIB) \
 		-o lsv-cpp.js \
 		-s USE_BOOST_HEADERS=1 \
-		-s ALLOW_MEMORY_GROWTH=1 -s STACK_SIZE=67108864
+		-s ALLOW_MEMORY_GROWTH=0 -s INITIAL_MEMORY=256MB \
+		-s STACK_SIZE=67108864
 
 # LOCAL BUILD
 

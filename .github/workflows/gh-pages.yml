@@ -39,20 +39,22 @@ jobs:
       - name: install build dependencies
         run: sudo apt-get install -y -q autoconf automake libtool texinfo
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: 
           submodules: recursive
       - name: Setup emscripten
-        uses: mymindstorm/setup-emsdk@v16
+        uses: emscripten-core/setup-emsdk@v16
       - name: make
         run: make
+      - name: cleanup
+        run: rm -rf external
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           # Upload entire repository
           path: '.'
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
