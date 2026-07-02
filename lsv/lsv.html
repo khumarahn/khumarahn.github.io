@@ -34,7 +34,18 @@
         </div>
 
         <h3>Theorem</h3>
-        <div id='thm'></div>
+        <div id="theorem-text"></div>
+        <div id="theorem-control"></div>
+
+        <details style="margin-top: 1rem; margin-bottom: 3rem;
+            border: 0.1rem solid #ccc; padding: 0.5rem; border-radius: 0.3rem;">
+            <summary id="reasoning-summary" style="cursor: pointer;
+                font-family: monospace; color: #555;">
+                Reasoning: waiting for a communication...
+            </summary>
+            <pre id="reasoning-log" style="margin-top: 1rem; max-height: 25vh;
+            overflow-y: auto; font-size: 0.9em; white-space: pre-wrap;"></pre>
+        </details>
 
         <script src="lsv.js"></script>
         <script src="lsv-graph.js"></script>

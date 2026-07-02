@@ -1,31 +1,33 @@
 .DEFAULT_GOAL := web
+.PHONY: web test
+web: lsv-cpp.js
 
-WASM_OPT = -O3 -flto
+WASM_OPT = -O3 -flto -m64
 GMP_LIB  = ../external/gmp/wasm-build/lib/libgmp.a
 MPFR_LIB = ../external/mpfr/wasm-build/lib/libmpfr.a
 MPFI_LIB = ../external/mpfi/wasm-build/lib/libmpfi.a
 
-$(GMP_LIB):
+$(GMP_LIB): Makefile
 	cd ../external/gmp && touch doc/version.texi && \
 	(test -f configure || ./autogen.sh || autoreconf -fi) && \
 	emconfigure ./configure --disable-assembly --host=none --enable-cxx --prefix=$$(pwd)/wasm-build CFLAGS="$(WASM_OPT)" CXXFLAGS="$(WASM_OPT)" && \
 	emmake make -j$$(nproc) && emmake make install
 
-$(MPFR_LIB): $(GMP_LIB)
+$(MPFR_LIB): Makefile $(GMP_LIB)
 	cd ../external/mpfr && \
 	(test -f configure || ./autogen.sh || autoreconf -fi) && \
 	emconfigure ./configure --host=none --with-gmp=$$(pwd)/../gmp/wasm-build --prefix=$$(pwd)/wasm-build CFLAGS="$(WASM_OPT)" CXXFLAGS="$(WASM_OPT)" && \
 	emmake make -j$$(nproc) && emmake make install
 
-$(MPFI_LIB): $(MPFR_LIB)
+$(MPFI_LIB): Makefile $(MPFR_LIB)
 	cd ../external/mpfi && \
 	(test -f configure || ./autogen.sh || autoreconf -fi) && \
 	emconfigure ./configure --host=none --with-gmp=$$(pwd)/../gmp/wasm-build --with-mpfr=$$(pwd)/../mpfr/wasm-build --prefix=$$(pwd)/wasm-build CFLAGS="$(WASM_OPT)" CXXFLAGS="$(WASM_OPT)" && \
 	emmake make -j$$(nproc) && emmake make install
 
-# Note: web target now depends on the three library files and uses -O3
-.PHONY web:: $(GMP_LIB) $(MPFR_LIB) $(MPFI_LIB)
-	em++ -O3 -std=c++23 -flto -msimd128 \
+
+lsv-cpp.js: Makefile *.cpp *.h $(GMP_LIB) $(MPFR_LIB) $(MPFI_LIB)
+	em++ $(WASM_OPT) -std=c++23 -msimd128 \
 		-Wall -Wno-deprecated-declarations \
 		-lembind \
 		-I../external/eigen \
@@ -47,5 +49,5 @@ LL = -I../external/eigen -Wall -std=c++23 -lgmp -lmpfr -lmpfi -fopenmp
 #DD = -g -fsanitize=address,leak,undefined
 DD = -g -fsanitize=undefined
 
-.PHONY test::
+test:
 	clang++ $(LL) $(DD) -O3 -march=native lsv-test.cpp -o lsv-test.x

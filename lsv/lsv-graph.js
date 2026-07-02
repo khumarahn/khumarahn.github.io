@@ -25,50 +25,80 @@ function lsv_trace() {
 
 function alphaChange() {
     alpha = alphaInput();
-    document.getElementById("alphaValue").innerHTML = alpha.toFixed(4);
     Plotly.newPlot('lsv', [lsv_trace()],{ yaxis: {range: [0,1.02], dtick: 0.25}, xaxis: {range: [0,1.02], dtick: 0.25}});
 
-    document.getElementById('thm').innerHTML += '<br>... formulating for alpha ≈ ' + alpha.toFixed(6) + ' ...';
+    if (!workerBusy) {
+        document.getElementById('theorem-control').innerHTML = `
+            <br>
+                <button id="theorem-btn" style=" background-color: #007bff; color: white; border: none; 
+                    border-radius: 0.3rem; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer;  margin-top: 0.5rem;">
+                    Formulate the result for \\(\\alpha=${alpha}\\)
+                </button>
+            `;
 
-    worker.postMessage({
-        gamma: 1. / alpha
-    });
+        document.getElementById('theorem-btn').addEventListener('click', function(e) {
+            e.preventDefault(); // no page jump
+
+            document.getElementById('theorem-control').innerHTML = `<span>Computing bounds for \\(\\alpha=${alpha}\\)...</span>`;
+
+            document.getElementById('reasoning-log').textContent += '\n\n';
+            document.getElementById('reasoning-summary').textContent = 'Reasoning...';
+
+            worker.postMessage({ type: 'compute-bounds', gamma: 1 / alpha });
+            workerBusy = true;
+
+            MathJax.typeset();
+        });
+    }
 
     MathJax.typeset();
 }
 
 function alphaInput() {
     let a = 0.5 + document.getElementById("alphaSlider").value / 256;
-    document.getElementById("alphaValue").innerHTML = a.toFixed(4) + " (wait for calculations!)";
+    document.getElementById("alphaValue").innerHTML = a.toFixed(4);
     return a;
 }
 
 let worker = new Worker('lsv-worker.js');
+let workerBusy = false;
 
-worker.onmessage = function(event) {
-    let message = event.data;
+worker.onmessage = function(e) {
+    let m = e.data;
 
-    let thm = String.raw`
+    if (m.type === 'stdout') {
+        let log = document.getElementById('reasoning-log');
+
+        log.textContent += e.data.text + '\n';
+        log.scrollTop = log.scrollHeight; // auto-scroll to bottom
+    } else if (m.type === 'bounds') {
+
+        let thm = String.raw`
+        <div>
         For \( \alpha \approx ::alpha:: \), the invariant density \(h(x)\)
-        for \(x \in (0, 1]\) satisfies:
+        on \((0, 1]\) satisfies:
         \[
             \Bigl( \frac{h'}{h} \Bigr)' \geq ::hp::
             \quad \text{and} \quad
             \Bigl( \frac{h''}{h} \Bigr)' \leq ::hpp::
             .
         \]
-    `;
+        </div>
+       `;
 
-    thm = thm.replaceAll('::alpha::', message.alpha.toFixed(6))
-        .replaceAll('::hp::', message.min_hp_h_prime.toFixed(6))
-        .replaceAll('::hpp::', message.max_hpp_h_prime.toFixed(6));
+        thm = thm.replaceAll('::alpha::', m.alpha.toFixed(6))
+            .replaceAll('::hp::', m.min_hp_h_prime.toFixed(6))
+            .replaceAll('::hpp::', m.max_hpp_h_prime.toFixed(6));
 
-    document.getElementById("thm").innerHTML = thm;
+        document.getElementById("theorem-text").innerHTML += thm;
 
-    MathJax.typeset();
+        document.getElementById('theorem-control').innerHTML = '';
+        document.getElementById('reasoning-summary').innerHTML = 'Done reasoning';
 
-    console.log("gg gamma:", message.gamma);
+        workerBusy = false;
 
+        MathJax.typeset();
+    }
 };
 
 function startup() {
@@ -78,10 +108,6 @@ function startup() {
     }
 
     alphaChange();
-
-    worker.postMessage({
-        gamma: 1. / alpha
-    });
 }
 
 startup();

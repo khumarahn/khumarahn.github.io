@@ -77,10 +77,9 @@ class LSV : public BaseLSV {
         // 1
         void compute_L() {
             assert(computation_step_ == 1); computation_step_++;
-            std::cout << "Computing induced transfer operator matrix..."
-                << std::flush;
+            std::cout << "Computing induced transfer operator matrix...\n";
             L_ = Lind();
-            std::cout << " done!\n";
+            std::cout << "transfer operator computed!\n";
 
         }
         // 2
