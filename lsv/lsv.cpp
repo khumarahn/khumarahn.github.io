@@ -17,7 +17,7 @@ const int PREC = 32;
 EMSCRIPTEN_BINDINGS(my_module) {
     emscripten::class_<LSV>("LSV")
         .constructor()
-        .function("set_gamma", &LSV::set_gamma)
+        .function("set_alpha", &LSV::set_alpha)
         .function("compute_L", &LSV::compute_L)
         .function("compute_h_meta", &LSV::compute_h_meta)
         .function("compute_h_cheb", &LSV::compute_h_cheb)

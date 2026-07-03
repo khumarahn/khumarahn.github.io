@@ -23,7 +23,7 @@ int main() {
     const interval_t ONE = lsv.ONE, HALF = lsv.HALF;
 
     // 0
-    lsv.set_gamma(1.1);
+    lsv.set_alpha(0.875);
     // 1
     lsv.compute_L();
     // 2

@@ -45,7 +45,10 @@ function alphaChange() {
             document.getElementById('reasoning-log').textContent += '\n\n';
             document.getElementById('reasoning-summary').textContent = 'Reasoning...';
 
-            worker.postMessage({ type: 'compute-bounds', gamma: 1 / alpha });
+            worker.postMessage({
+                type: 'compute-bounds',
+                alpha: alpha
+            });
             workerBusy = true;
 
             MathJax.typeset();

@@ -4,30 +4,31 @@ var lsv_cpp;
 var orders = [];
 
 self.Module = {
-    print: function(text) {
+    'print': function(text) {
         self.postMessage({
             type: 'stdout',
             text: text
         });
     },
-    onRuntimeInitialized: function() {
+    'onRuntimeInitialized': function() {
         lsv_cpp = new Module.LSV();
+
         runOrders();
     }
 };
 
 onmessage = function(e) {
     orders.push(e.data);
-    runOrders();
 }
 
 function runOrders() {
     if (orders.length > 0) {
         let e = orders.shift();
-        if (e.type === 'compute-bounds') {
-            let gamma = e.gamma;
 
-            lsv_cpp.set_gamma(gamma);
+        if (e.type === 'compute-bounds') {
+            let alpha = e.alpha;
+
+            lsv_cpp.set_alpha(alpha);
             lsv_cpp.compute_L();
             lsv_cpp.compute_h_meta();
             lsv_cpp.compute_h_cheb();
@@ -51,9 +52,7 @@ function runOrders() {
         }
     }
 
-    if (orders.length > 0) {
-        setTimeout(runOrders, 1000);
-    }
+    setTimeout(runOrders, 1000);
 }
 
 importScripts('lsv-cpp.js');

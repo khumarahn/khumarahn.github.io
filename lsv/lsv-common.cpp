@@ -59,16 +59,15 @@ class LSV : public BaseLSV {
         interval_t cheb_range(const interval_cheb_t &p);
 
     public:
-        void set_gamma(double g) {
+        void set_alpha(double alpha) {
             std::cout << "\nThe user wants me to compute the invariant measure for\n"
                 << "the LSV map. This is Liverani-Saussol-Vaienti.\n"
                 << "Wait, who are these people, and why me?\n\n";
 
-            const interval_t gamma = interval_t(g) + interval_t(-1,1) * 1e-50;
+            interval_t gamma = 1 / interval_t(alpha)
+                + interval_t(-1,1) * 1e-50;
 
             BaseLSV::set_gamma(gamma);
-
-            real_t a = 0.5, b = 1.0;
 
             fp_c1_ = pow(2, gamma_) * (gamma_ + 1);
             fp_c2_ = fp_c1_ * gamma_;
@@ -273,8 +272,8 @@ class LSV : public BaseLSV {
 void LSV::compute_F() {
     assert(computation_step_ == 4); computation_step_++;
 
-    std::cout << "\nIf all those numbers meant anything, what would it be?\n"
-        << "Ah, yes!\n\n";
+    std::cout << "\nIf all those numbers meant something, what would it be?\n"
+        << "  ....  ....  ....  Ah, yes!\n\n";
 
     for (int r_star_factor = 1; r_star_factor <= 64; r_star_factor *= 2) {
         //cout << "\n\nComputing F_1, F_2, F_3:\n";
@@ -591,7 +590,7 @@ void LSV::compute_derivative_bounds() {
         }
     }
 
-    std::cout << "\nWait, I can forget all that and just interpolate:\n\n";
+    std::cout << "\nWait, I can forget all that and just extrapolate:\n\n";
 
     std::cout << "Theorem. On (0,1]:\n"
         << "  (h'/h)' >= " << min_hp_h_prime_ << "\n"
