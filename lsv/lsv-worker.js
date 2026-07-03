@@ -3,30 +3,27 @@
 var lsv_cpp;
 var orders = [];
 
-// Add this at the VERY TOP of the file
 self.Module = {
-    'print': function(text) {
+    print: function(text) {
         self.postMessage({
             type: 'stdout',
             text: text
         });
     },
-    'onRuntimeInitialized': function() {
+    onRuntimeInitialized: function() {
         lsv_cpp = new Module.LSV();
-
         runOrders();
     }
 };
 
 onmessage = function(e) {
     orders.push(e.data);
+    runOrders();
 }
 
 function runOrders() {
     if (orders.length > 0) {
-
         let e = orders.shift();
-
         if (e.type === 'compute-bounds') {
             let gamma = e.gamma;
 
@@ -54,7 +51,9 @@ function runOrders() {
         }
     }
 
-    setTimeout(runOrders, 100);
+    if (orders.length > 0) {
+        setTimeout(runOrders, 1000);
+    }
 }
 
 importScripts('lsv-cpp.js');

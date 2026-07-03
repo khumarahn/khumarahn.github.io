@@ -92,7 +92,6 @@ worker.onmessage = function(e) {
         </div>
        `;
 
-        console.log("huj", m.alpha_minus);
         thm = thm.replaceAll('::alpha_minus::', m.alpha_minus)
             .replaceAll('::alpha_plus::', m.alpha_plus)
             .replaceAll('::hp::', m.min_hp_h_prime)
