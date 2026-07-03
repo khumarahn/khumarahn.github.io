@@ -24,7 +24,7 @@ class LSV : public BaseLSV {
         // errors in approximation of the derivatives on [1/2,1]
         interval_t hp1_cheb_err_, hp2_cheb_err_, hp3_cheb_err_;
         // and sup norms of derivatives on [1/2,1]
-        interval_t hp1_sup_, hp2_sup_, hp3_sup_;
+        //interval_t hp1_sup_, hp2_sup_, hp3_sup_;
 
         // F-constants
         interval_t x_star_,
@@ -118,9 +118,9 @@ class LSV : public BaseLSV {
 
             h_sup_A_ = UPPER(h_cheb_.ellipse_norm(rho_A_) + h_cheb_err_A_);
 
-            hp1_sup_ = UPPER(hp1_cheb_.ellipse_norm(1) + hp1_cheb_err_);
-            hp2_sup_ = UPPER(hp2_cheb_.ellipse_norm(1) + hp2_cheb_err_);
-            hp3_sup_ = UPPER(hp3_cheb_.ellipse_norm(1) + hp3_cheb_err_);
+            //hp1_sup_ = UPPER(hp1_cheb_.ellipse_norm(1) + hp1_cheb_err_);
+            //hp2_sup_ = UPPER(hp2_cheb_.ellipse_norm(1) + hp2_cheb_err_);
+            //hp3_sup_ = UPPER(hp3_cheb_.ellipse_norm(1) + hp3_cheb_err_);
         }
         // 4
         void compute_F();
@@ -309,7 +309,7 @@ void LSV::compute_F() {
                    r_star_2 = varkappa1 * nu / ((abel_am1 - abel.C1) * (1 - R)),
                    r_star = max(r_star_1, r_star_2);
 
-        // artificially increare r_star to reduce the error in F-constants
+        // artificially increase r_star to reduce the error in F-constants
         r_star *= r_star_factor;
 
         x_star_ = pow(interval_t(2), - 1 - 1 / (2 * gamma_)) * pow(r_star, - 1 / gamma_);
@@ -318,7 +318,7 @@ void LSV::compute_F() {
         //    << ", r_star: " << r_star
         //    << ", x_star: " << x_star << "\n";
 
-        interval_t C_psi = h_cheb_err_A_ * (abel_am1 + abel.C1)
+        interval_t C_psi = h_sup_A_ * (abel_am1 + abel.C1)
             / (abel_am1 - abel.C1)
             * pow(R, - (1 + 1 / gamma_));
         interval_t R_L = 6 * C_psi
@@ -346,14 +346,15 @@ void LSV::compute_F() {
                        D3 = D0 * (pow(gamma_, 3) + 15 * pow(gamma_, 2) + 56 * gamma_ + 48);
             interval_t zh = Delta_star * pow(x_star_, gamma_);
             interval_t M0 = gamma_ * abel_am1 * H(HALF) / 2,
-                       M1 = gamma_ * abel_am1 * Hp1(HALF) / 8;
-            interval_t delta0 = abs(M1) * x_star_ + D0 * pow(x_star_, 2) + zh,
+                       M1 = gamma_ * abel_am1 * Hp1(HALF) / 8,
+                       x_star_2 = x_star_ * x_star_;
+            interval_t delta0 = abs(M1) * x_star_ + D0 * x_star_2 + zh,
                        delta1 = abs(1 - gamma_) * abs(M1) * x_star_
-                           + D1 * pow(x_star_, 2) +  zh * theta_star,
+                           + D1 * x_star_2 +  zh * theta_star,
                        delta2 = gamma_ * abs(1 - gamma_) * abs(M1) * x_star_
-                           + D2 * pow(x_star_, 2) +  2 * zh * pow(theta_star, 2),
-                       delta3 = gamma_ * (gamma_ + 1) * abs(1 - gamma_) * abs(M1) * x_star_
-                           + D3 * pow(x_star_, 2) +  6 * zh * pow(theta_star, 3);
+                           + D2 * x_star_2 +  2 * zh * pow(theta_star, 2),
+                       delta3 = gamma_ * abs(1 - gamma_) * abs(M1) * x_star_ * (gamma_ + 1)
+                           + D3 * x_star_2 +  6 * zh * pow(theta_star, 3);
 
             F1_minus_ = LOWER((gamma_ * M0 - delta1) / (M0 + delta0));
             F2_minus_ = LOWER((gamma_ * (gamma_ + 1) * M0 - delta2) / (M0 + delta0));
@@ -441,11 +442,10 @@ void LSV::compute_derivative_bounds() {
 #pragma omp parallel for
     for (int k = M - 1; k >= M - N; k--) {
         H_val(k) = H(P[k]);
-    }
-
-    for (int k = M - N - 1; k >= 0; k--) {
-        interval_t f_prime = fp(1, P[k + N]);
-        H_val(k) = HALF * H((1 + P[k]) / 2) + H_val(k + N) / f_prime;
+        for (int j = k - N; j >= 0; j -= N) {
+            interval_t f_prime = fp(1, P[j + N]);
+            H_val(j) = HALF * H((1 + P[j]) / 2) + H_val(j + N) / f_prime;
+        }
     }
 
     // array of bounds (C_0, C_1, C_2, C_3),
@@ -567,7 +567,7 @@ void LSV::compute_derivative_bounds() {
                         const interval_t &hn = H_val(in), &ho = H_val(io);
                         interval_t m1 = UPPER(- derivative_range(o, p, ho, hp, 0)),
                                    m2 = UPPER(second_derivative_range(n, o, p, hn, ho, hp, 0));
-                        if (d == 0) {
+                        if (d == 1) {
                             M1 = m1;
                             M2 = m2;
                         } else {
@@ -598,12 +598,14 @@ void LSV::compute_derivative_bounds() {
         << "  (h''/h)' <= " << max_hpp_h_prime_ << "\n";
 
     std::cout
-        << "\nIt looks close to what the user wanted. My context window is\n"
+        << "\nThis looks close to what the user wanted. My context window is\n"
         << "almost full, so it will have to do. Maybe I'll run a check...\n\n";
 
     std::cout << "Sanity check:\n"
         << "  (h'/h)'(1): " << Hp2(1) / H(1) - pow(Hp1(1) / H(1), 2) << "\n"
         << "  (h''/h)'(1): " << Hp3(1) / H(1) - Hp1(1) * Hp2(1) / pow(H(1), 2) << "\n";
+
+    std::cout << "\n  ....  hmmmmm  ....  \n\n";
 
     assert(min_hp_h_prime_ > 0 && max_hpp_h_prime_ < 0);
 
