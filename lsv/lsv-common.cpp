@@ -64,8 +64,9 @@ class LSV : public BaseLSV {
                 << "the LSV map. This is Liverani-Saussol-Vaienti.\n"
                 << "Wait, who are these people, and why me?\n\n";
 
-            interval_t gamma = 1 / interval_t(alpha)
-                + interval_t(-1,1) * 1e-50;
+            interval_t gamma = 1 / (
+                    alpha + interval_t(-1,1) * 1e-50
+                    );
 
             BaseLSV::set_gamma(gamma);
 
@@ -83,14 +84,14 @@ class LSV : public BaseLSV {
             std::cout
                 << "Allocating memory for a transfer operator matrix...\n"
                 << "It should be small... right?... right?...\n"
-                << "          have you seen my garbage collector?\n";
+                << "          have you seen my garbage collection?\n";
             L_ = Lind();
         }
         // 2
         void compute_h_meta() {
             assert(computation_step_ == 2); computation_step_++;
             std::cout <<
-                "\nAnalyzing the topological implications... Just kidding, I am after\n"
+                "\nAnalyzing topological implications... Just kidding, I am after\n"
                 << "the invariant density. It should be close to an eigenvector of some\n"
                 << "operator, but how do I get it, and how do I know it's right?\n\n";
             h_meta_ = h_meta(L_);

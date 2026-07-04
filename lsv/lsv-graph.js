@@ -23,12 +23,27 @@ function lsv_trace() {
     return trace;
 }
 
+function alphaInput() {
+    let a = 0.5 + document.getElementById("alphaSlider").value / 256;
+    document.getElementById("alphaValue").innerHTML = `${a}`;
+    return a;
+}
+
 function alphaChange() {
     alpha = alphaInput();
-    Plotly.newPlot('lsv', [lsv_trace()],{ yaxis: {range: [0,1.02], dtick: 0.25}, xaxis: {range: [0,1.02], dtick: 0.25}});
+    Plotly.newPlot('lsv', [lsv_trace()], {yaxis: {range: [0,1.02], dtick: 0.25}, xaxis: {range: [0,1.02], dtick: 0.25}});
 
     if (!workerBusy) {
-        document.getElementById('theorem-control').innerHTML = `
+        prepareWorker();
+    }
+
+    MathJax.typeset();
+}
+
+function prepareWorker() {
+    alpha = alphaInput();
+
+    document.getElementById('theorem-control').innerHTML = `
             <br>
                 <button id="theorem-btn" style=" background-color: #007bff; color: white; border: none; 
                     border-radius: 0.3rem; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer;  margin-top: 0.5rem;">
@@ -36,32 +51,23 @@ function alphaChange() {
                 </button>
             `;
 
-        document.getElementById('theorem-btn').addEventListener('click', function(e) {
-            e.preventDefault(); // no page jump
+    document.getElementById('theorem-btn').addEventListener('click', function(e) {
+        e.preventDefault(); // no page jump
 
-            document.getElementById('theorem-control').innerHTML =
-                `<span>Computing bounds for \\(\\alpha \\approx ${alpha}\\)...</span>`;
+        document.getElementById('theorem-control').innerHTML =
+            `<span>Computing bounds for \\(\\alpha \\approx ${alpha}\\)...</span>`;
 
-            document.getElementById('reasoning-log').textContent += '\n\n';
-            document.getElementById('reasoning-summary').textContent = 'Reasoning...';
+        document.getElementById('reasoning-log').textContent += '\n\n';
+        document.getElementById('reasoning-summary').textContent = 'Reasoning...';
 
-            worker.postMessage({
-                type: 'compute-bounds',
-                alpha: alpha
-            });
-            workerBusy = true;
-
-            MathJax.typeset();
+        worker.postMessage({
+            type: 'compute-bounds',
+            alpha: alpha
         });
-    }
+        workerBusy = true;
 
-    MathJax.typeset();
-}
-
-function alphaInput() {
-    let a = 0.5 + document.getElementById("alphaSlider").value / 256;
-    document.getElementById("alphaValue").innerHTML = `${a}`;
-    return a;
+        MathJax.typeset();
+    });
 }
 
 let worker = new Worker('lsv-worker.js');
@@ -106,6 +112,7 @@ worker.onmessage = function(e) {
         document.getElementById('reasoning-summary').innerHTML = 'Done reasoning';
 
         workerBusy = false;
+        prepareWorker();
 
         MathJax.typeset();
     }
