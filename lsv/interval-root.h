@@ -50,6 +50,15 @@ template <unsigned d10>
 template <unsigned d10>
     using MatrixXi = Eigen::Matrix<interval_t<d10>, Eigen::Dynamic, Eigen::Dynamic>;
 
+// bmp::proper_subset should be called "strictly inside"
+// we need a proper version...
+template <unsigned d10>
+bool i_proper_subset(const interval_t<d10> &a, const interval_t<d10> &b) {
+    return
+        (bmp::lower(a) >= bmp::lower(b) && bmp::upper(a) <  bmp::upper(b)) ||
+        (bmp::lower(a) >  bmp::lower(b) && bmp::upper(a) <= bmp::upper(b));
+}
+
 // HELPER FUNCTIONS FOR COMPLEX INTERVALS
 
 template <unsigned d10>
@@ -76,10 +85,10 @@ bool subset(const complex_interval_t<d10> &a, const complex_interval_t<d10> &b) 
 }
 
 template <unsigned d10>
-bool proper_subset(const complex_interval_t<d10> &a, const complex_interval_t<d10> &b) {
+bool c_proper_subset(const complex_interval_t<d10> &a, const complex_interval_t<d10> &b) {
     return
-        ( bmp::proper_subset(a.real(), b.real()) && bmp::subset(a.imag(), b.imag()) ) ||
-        ( bmp::subset(a.real(), b.real()) && bmp::proper_subset(a.imag(), b.imag()) ) ;
+        ( i_proper_subset(a.real(), b.real()) && bmp::subset(a.imag(), b.imag()) ) ||
+        ( bmp::subset(a.real(), b.real()) && i_proper_subset(a.imag(), b.imag()) ) ;
 }
 
 // HELPER FUNCTIONS FOR INTERVAL VECTORS
@@ -108,7 +117,7 @@ bool subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
 }
 
 template <unsigned d10>
-bool proper_subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
+bool v_proper_subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
     assert(a.size() == b.size());
     bool proper = false;
     const int N = a.size();
@@ -116,7 +125,7 @@ bool proper_subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
         if (!bmp::subset(a(i),b(i))) {
             return false;
         }
-        if (!proper && bmp::proper_subset(a(i),b(i))) {
+        if (!proper && i_proper_subset(a(i),b(i))) {
             proper = true;
         }
     }
@@ -148,7 +157,7 @@ Vector2i<d10> interval_newton(const f_t &f, const interval_t<d10> &guess) {
         i_t Z = m - f(m)(0) / P;
         i_t ZZ = bmp::intersect(Z, Y); // is this needed?
 
-        if (!bmp::proper_subset(ZZ,Y))
+        if (!i_proper_subset(ZZ,Y))
             break;
 
         Y = ZZ;
@@ -190,7 +199,7 @@ Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &gue
         assert(overlap(X, K));
         ci_t XX = intersect(X, K);
 
-        if (!proper_subset(XX,X)) {
+        if (!c_proper_subset(XX,X)) {
             break;
         }
 
@@ -260,7 +269,7 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
         Vi_t XX = Y * b + E * X,
              XXX = intersect(X, XX);
 
-        if (!proper_subset(XXX,X)) {
+        if (!v_proper_subset(XXX,X)) {
             break;
         }
         X = XXX;

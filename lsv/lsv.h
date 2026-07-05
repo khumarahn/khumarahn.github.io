@@ -94,7 +94,7 @@ class LSV {
             // array of coefficients
             VectorXi coef;
             VectorXr coef_ni;
-            // |\tA(z) - \tA_n(z)| \leq C0 |t|^{-n}  when  Re(t) \geq r
+            // |\tA(t) - \tA_n(t)| \leq C0 |t|^{-n}  when  Re(t) \geq r
             interval_t r, C0;
             // \tA(t) is computed with desired accuracy when Re(t) \geq r_good
             interval_t r_good;
@@ -125,10 +125,8 @@ class LSV {
 
         // error and metadata for the invariant density
         struct h_meta_t {
-            //MatrixXi L;
             interval_cheb_t h;
             interval_t err, rho_A;
-            interval_t theta_C;
         };
 
     protected:
@@ -239,7 +237,7 @@ class LSV {
                 assert(!(DIGITS < NEED_DIGITS_));
             }
 
-            int n = int(ceil(mlogeps)); // TODO what is the best choice?
+            int n = int(ceil(bmp::upper(mlogeps))); // TODO what is the best choice?
             abel_ = compute_abel_stuff(n);
             abel_rough_ = compute_abel_stuff(8, true);  // 八八八八八八八八
 
@@ -323,13 +321,13 @@ class LSV {
 
         // inverses
         Vector2i left_inv(const interval_t &x) const {
-            assert(bmp::lower(x) >= 0);
+            assert(bmp::lower(x) >= 0 && bmp::upper(x) <= 1);
             // max derivative is
-            interval_t md = left(interval_t(1) / 2)(1);
+            interval_t md = left(HALF)(1);
             // an interval enclosing the root
             interval_t guess(
                     bmp::lower(interval_t(x / md)),
-                    bmp::upper(x)
+                    bmp::upper(x) < HALF ? bmp::upper(x) : HALF
                     );
 
             auto f = [this, &x] (const interval_t &z) {
@@ -342,7 +340,10 @@ class LSV {
 
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> right_inv(const var_t &x) const {
-            return Vector2<var_t>((x + var_t(1)) / var_t(2), 0.5);
+            return Vector2<var_t>(
+                    (x + var_t(1)) / var_t(2),
+                    var_t(1) / var_t(2)
+                    );
         }
 
         // sum S(x) = \sum_{k \geq 0} \varphi((x_k + 1) / 2) / J_k(x_k)
@@ -648,7 +649,6 @@ class LSV {
             assert(delta[n] < 0.5);
             std::cout << "  delta[" << n << "] = " << delta[n] << " < 0.5\n";
 
-            meta.theta_C = theta_C_;
             meta.rho_A = rho_A_;
 
             interval_t norm_h_A = meta.h.ellipse_norm(rho_A_);
