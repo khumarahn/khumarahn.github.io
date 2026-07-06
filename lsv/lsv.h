@@ -547,8 +547,8 @@ class LSV {
                     inv_d_A(k) = 2 / sqrt(pow(rho_A, 2*k) + pow(rho_A, -2*k));
                 }
 
-                interval_t K_AC_sq = 0;
-                for (int k = 0; k < n; k++) {
+                interval_t K_AC_sq = 1;
+                for (int k = 1; k < n; k++) {
                     interval_t num = pow(pow(rho_A, k) + pow(rho_A, -k), 2);
                     interval_t den = pow(rho_C, 2*k) + pow(rho_C, -2*k);
                     K_AC_sq += num / den;
