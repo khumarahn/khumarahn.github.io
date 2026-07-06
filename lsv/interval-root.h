@@ -226,18 +226,18 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     const int N = A.cols();
 
     // norm
-    auto norm = [] (const Mi_t &U) {
-        // abs for intervals
-        auto iabs = [] (const auto &x) {
-            return max(abs(bmp::lower(x)), abs(bmp::upper(x)));
-        };
-        r_t no = 0;
-        for (int i=0; i<U.rows(); i++) {
-            r_t s = 0;
-            for (int j=0; j<U.cols(); j++) {
-                s += iabs(U(i,j));
+    auto norm = [] (const Mi_t &U) -> i_t {
+        i_t no = 0;
+        for (int i = 0; i < U.rows(); i++) {
+            i_t s = 0;
+            for (int j = 0; j < U.cols(); j++) {
+                r_t u = max(
+                        abs(bmp::lower(U(i,j))),
+                        abs(bmp::upper(U(i,j)))
+                        );
+                s = bmp::upper(i_t(s + u));
             }
-            no = max(no,s);
+            no = max(no, s);
         }
         return no;
     };
@@ -256,10 +256,10 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     }
 
     Mi_t E = Mi_t::Identity(N,N) - Y * A;
-    r_t normE = norm(E);
+    i_t normE = norm(E);
     assert(normE < 1);
 
-    i_t x0 = i_t(-1,1) * norm(Y * b) / (1 - normE);
+    i_t x0 = i_t(-1, 1) * norm(Y * b) / (1 - normE);
     Vi_t X = Vi_t::Constant(N, x0);
 
     // check that the initial interval X makes sense

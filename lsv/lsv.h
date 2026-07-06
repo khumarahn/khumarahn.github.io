@@ -391,7 +391,7 @@ class LSV {
 //    << " Ax(0): " << Ax(0) << ", width: " << bmp::width(Ax(0))
 //    << "\n";
                         Vector2ci xm_inv = abel_inv(Ax(0) + s(m-1));
-                        der += ( c(m-1) * phi(xm_inv(0)) * xm_inv(1) ).real();
+                        der += ((c(m-1) * xm_inv(1)) * phi(xm_inv(0))).real();
                     }
 
                     der *= - 2 * Ax(1) / abel_.M;
@@ -490,8 +490,8 @@ class LSV {
                     Bbk(k) = bmp::upper(Bbk(k));
                 }
 
-                for (int j = 0; j < N_; j++) {
-                    for (int k = 0; k < N_; k++) {
+                for (int k = 0; k < N_; k++) {
+                    for (int j = 0; j < N_; j++) {
                         interval_t w = Bbk(k) * (1 / Cj(j) + Cj(j) * C2N),
                                    ww = interval_t(-1, 1) * bmp::upper(w);
                         R(j, k) = bmp::intersect(R(j, k), ww);
