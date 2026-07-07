@@ -25,6 +25,7 @@
 //#include "clenshawcurtis.h"
 #include "cheb.h"
 #include "interval-root.h"
+#include "verify.h"
 
 // Range checking is disabled if NDEBUG or EIGEN_NO_DEBUG is defined
 
@@ -163,7 +164,7 @@ class LSV {
 
         void compute_derivatives_cs() {
             // check that required constants are set
-            assert(abel_.halfM > 0 && abel_.M > 0
+            verify(abel_.halfM > 0 && abel_.M > 0
                     && abel_.Nstar > 0 && abel_.L > 0);
 
             VectorXci &s = derivatives_s_;
@@ -234,7 +235,7 @@ class LSV {
             }
             if(DIGITS < NEED_DIGITS_) {
                 std::cout << "Need more DIGITS: " << NEED_DIGITS_ << "\n";
-                assert(!(DIGITS < NEED_DIGITS_));
+                verify(!(DIGITS < NEED_DIGITS_));
             }
 
             int n = int(ceil(bmp::upper(mlogeps))); // TODO what is the best choice?
@@ -321,7 +322,7 @@ class LSV {
 
         // inverses
         Vector2i left_inv(const interval_t &x) const {
-            assert(bmp::lower(x) >= 0 && bmp::upper(x) <= 1);
+            verify(bmp::lower(x) >= 0 && bmp::upper(x) <= 1);
             // max derivative is
             interval_t md = left(HALF)(1);
             // an interval enclosing the root
@@ -440,7 +441,7 @@ class LSV {
             // bound S(xk)
             interval_t w_minus_nu = Axk(0) - abel_.nu;
             interval_t tt = abel_t_inv(w_minus_nu)(0);
-            assert(tt > abel_.r1);
+            verify(tt > abel_.r1);
 
             //r += abs(Axk(1) * xk) + interval_t(1) / 2;
             //r += eps_sum_small_const_error_;
@@ -495,7 +496,7 @@ class LSV {
                         interval_t w = Bbk(k) * (1 / Cj(j) + Cj(j) * C2N),
                                    ww = interval_t(-1, 1) * bmp::upper(w);
                         R(j, k) = bmp::intersect(R(j, k), ww);
-                        assert(bmp::width(R(j,k)) >= 0);
+                        verify(bmp::width(R(j,k)) >= 0);
                     }
                 }
             }
@@ -536,7 +537,7 @@ class LSV {
             // norm of an operator given by a matrix
             // corresponding to Lemma \ref{lem:mnorm}
             auto norm_Q = [] (const MatrixXi& Q, interval_t rho_A, interval_t rho_C) {
-                assert(Q.cols() == Q.rows());
+                verify(Q.cols() == Q.rows());
                 int n = Q.cols();
 
                 VectorXi d_C(n), inv_d_A(n);
@@ -565,7 +566,7 @@ class LSV {
                 }
                 //std::cout << "Max width of the intervals in DQD: " << max_DQD_width
                 //    << "  [bad if large]\n";
-                assert(max_DQD_width < 0.001);
+                verify(max_DQD_width < 0.001);
 
                 interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
 
@@ -589,7 +590,7 @@ class LSV {
             // norm of I - \bpi between ellipses with
             // parameters rho_1 and rho_2
             auto norm_I_pi = [N] (interval_t rho_1, interval_t rho_2) {
-                assert(rho_1 > rho_2);
+                verify(rho_1 > rho_2);
                 interval_t norm = 8 / (pow(rho_1 / rho_2, N - 1) * log(rho_1 / rho_2));
                 norm = bmp::upper(norm);
                 return norm;
@@ -623,7 +624,7 @@ class LSV {
                 << "  eps: " << eps
                 << ", eps_prime: " << eps_prime << "\n";
 
-            assert(eps < 0.1);
+            verify(eps < 0.1);
 
             const MatrixXi bDelta = L - u * iota.transpose();
 
@@ -646,7 +647,7 @@ class LSV {
                 bDelta_n *= bDelta;
             }
 
-            assert(delta[n] < 0.5);
+            verify(delta[n] < 0.5);
             std::cout << "  delta[" << n << "] = " << delta[n] << " < 0.5\n";
 
             meta.rho_A = rho_A_;
@@ -675,7 +676,7 @@ class LSV {
             (type_one_of<var_t, real_t, complex_t> && type_one_of<coef_t, VectorXr>) ||
             (type_one_of<var_t, interval_t, complex_interval_t> && type_one_of<coef_t, VectorXi>)
         Vector2<var_t> abel_t_sum(const var_t &t, const coef_t &coef) const {
-            assert(coef.size() > 3);
+            verify(coef.size() > 3);
             int n = coef.size() - 3;
             var_t A = coef(0) * t + coef(1) * log(t) + coef(2),
                   dA = coef(0) + coef(1) / t;
@@ -721,7 +722,7 @@ class LSV {
             for (int i=0; i < 1000; i++) {
                 A = abel_t(t);
                 if (abs(A(0) - a) < 1000 * real_eps_) {
-                    assert(i < 256);
+                    verify(i < 256);
                     break;
                 }
                 t -= (A(0) - a) / A(1);
@@ -778,9 +779,9 @@ class LSV {
             // check if we are in the right region where we can compute the
             // Abel function accurately
             if constexpr (type_one_of<i_t, complex_interval_t>)
-                assert( bmp::lower(t.real()) >= abel_.r_good );
+                verify( bmp::lower(t.real()) >= abel_.r_good );
             else
-                assert( bmp::lower(t) >= abel_.r_good );
+                verify( bmp::lower(t) >= abel_.r_good );
 
             // ir_t is the underlying real interval type
             using ir_t = std::conditional_t<
@@ -899,15 +900,15 @@ void LSV<PREC>::compute_ellipses() {
                 if (i == 0 || bmp::lower(dist) < min_L) min_L = bmp::lower(dist);
                 if (i == 0 || bmp::upper(dist) < min_U) min_U = bmp::upper(dist);
             }
-            assert(min_L > q);
+            verify(min_L > q);
             return pow(interval_t(min_L, min_U) - q, g_inv);
         };
     norm_point_C_plus_ = norm_point(rho_C_plus_);
     norm_point_C_ = norm_point(rho_C_);
     norm_point_A_ = norm_point(rho_A_);
 
-    assert(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_ && rho_C_ < rho_C_plus_);
-    assert(0 < bmp::lower(norm_point_C_plus_)
+    verify(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_ && rho_C_ < rho_C_plus_);
+    verify(0 < bmp::lower(norm_point_C_plus_)
             && bmp::lower(norm_point_C_plus_) < bmp::lower(norm_point_C_)
             && bmp::lower(norm_point_C_) < bmp::lower(norm_point_A_));
 }
@@ -919,13 +920,13 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     using r_t = real_t;
     using i_t = interval_t;
 
-    assert(n > 0);
+    verify(n > 0);
     abel.n = n;
 
     abel.coef.resize(n + 3);
     abel.coef_ni.resize(n + 3);
 
-    assert(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_);
+    verify(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_);
 
     {   // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
         VectorXi b = VectorXi::Zero(abel.n + 2);
@@ -1051,11 +1052,11 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     // although the constant term is still zero
 
     const i_t &am1 = abel.coef(0);
-    assert(am1 > 0);
+    verify(am1 > 0);
 
     {   // r1, C1
         // increase r1 until C1 is significantly smaller than a_{-1}
-        assert(am1 > 0);
+        verify(am1 > 0);
         i_t max_C1 = am1 / (rough ? 4 : 16);
         max_C1 = bmp::lower(max_C1);
         for (abel.r1 = abel.r_good + 1; ; abel.r1 += 1) {
@@ -1092,7 +1093,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
 
     // L, nu, M
     if (!rough) {
-        assert(abel.r1 > 0 && rho_C_ > 0 && abel.varkappa0 > 0 && N_ > 0);
+        verify(abel.r1 > 0 && rho_C_ > 0 && abel.varkappa0 > 0 && N_ > 0);
 
         // exponential factor which should be outweighed by
         // L / (pi e nu varkappa_1)
@@ -1133,7 +1134,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
             i_t C = abel.varkappa0 * abel.nu / abel.am1_minus_C1,
                 D = 1 + 2 * abel.C1 / abel.am1_minus_C1,
                 E = pow(abel.max_kappa_ratio / D, gamma_ / (gamma_ + 1));
-            assert(E > 1);
+            verify(E > 1);
 
             // want t / (t - C) <= E
             t_good_for_kappa = C * E / (E - 1);
@@ -1175,24 +1176,24 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     // the second branch to the boundary of ellipse A
     abel.dist_P1_to_A = (rho_A_ + 1 / rho_A_) / 8 - i_t(1) / 4 - pow(abel.r1, - gamma_inv_) / 2;
     abel.dist_P1_to_A = bmp::lower(abel.dist_P1_to_A);
-    assert(abel.dist_P1_to_A > 0);
+    verify(abel.dist_P1_to_A > 0);
 
     // sanity checks
-    assert( abel.r > 0 );
-    assert( abel.C0 > 0 );
-    assert( abel.r_good > 0 );
-    assert( abel.r_good >= abel.r );
-    assert( abel.r1 > abel.r_good );
-    assert( abel.C1 > 0 );
-    assert( abel.C2 > 0 );
-    assert( abel.varkappa0 > 0 );
-    assert( abel.am1_minus_C1 > 0 );
+    verify( abel.r > 0 );
+    verify( abel.C0 > 0 );
+    verify( abel.r_good > 0 );
+    verify( abel.r_good >= abel.r );
+    verify( abel.r1 > abel.r_good );
+    verify( abel.C1 > 0 );
+    verify( abel.C2 > 0 );
+    verify( abel.varkappa0 > 0 );
+    verify( abel.am1_minus_C1 > 0 );
     if (!rough) {
-        assert( abel.nu > 0 );
-        assert( abel.x_Nstar > 0 );
-        assert( abel.L > 0 && abel.halfM >= abel.L
+        verify( abel.nu > 0 );
+        verify( abel.x_Nstar > 0 );
+        verify( abel.L > 0 && abel.halfM >= abel.L
                 && abel.M == 2 * abel.halfM);
-        assert(2 * pi_ * e_ * abel.nu * abel.varkappa0 > 2 * abel.L - 1);
+        verify(2 * pi_ * e_ * abel.nu * abel.varkappa0 > 2 * abel.L - 1);
     }
 
     return abel;
@@ -1252,7 +1253,7 @@ void LSV<PREC>::compute_sum_small_const_error() {
     VectorXi EE = E * cheb_max_r1;
 
     for (int i = 0; i < N_; i++) {
-        assert(EE(i) > 0);
+        verify(EE(i) > 0);
         real_t ei = bmp::upper(EE(i));
         EE(i) = interval_t(-ei, ei);
     }

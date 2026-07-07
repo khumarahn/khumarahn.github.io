@@ -80,7 +80,7 @@ class LSV : public BaseLSV {
         }
         // 1
         void compute_L() {
-            assert(computation_step_ == 1); computation_step_++;
+            verify(computation_step_ == 1); computation_step_++;
             std::cout
                 << "Allocating memory for a transfer operator matrix...\n"
                 << "It should be small... right?... right?...\n"
@@ -89,7 +89,7 @@ class LSV : public BaseLSV {
         }
         // 2
         void compute_h_meta() {
-            assert(computation_step_ == 2); computation_step_++;
+            verify(computation_step_ == 2); computation_step_++;
             std::cout <<
                 "\nAnalyzing topological implications... Just kidding, I am after\n"
                 << "the invariant density. It should be close to an eigenvector of some\n"
@@ -98,7 +98,7 @@ class LSV : public BaseLSV {
         }
         // 3
         void compute_h_cheb() {
-            assert(computation_step_ == 3); computation_step_++;
+            verify(computation_step_ == 3); computation_step_++;
             std::cout << "\nI do not want to think anymore, I just want to crunch...\n"
                 << "... number ... number ... number ... number ...\n";
             h_cheb_ = h_meta_.h;
@@ -126,14 +126,14 @@ class LSV : public BaseLSV {
         void compute_F();
         // 5
         void compute_derivative_signs_right() {
-            assert(computation_step_ == 5); computation_step_++;
+            verify(computation_step_ == 5); computation_step_++;
             std::cout << "For x in [1/2, 1] I feel I should know more. Let's see:\n\n";
             std::cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on [1/2,1].\n"
                 << "Proving...\n";
             interval_t hp1_max = UPPER(cheb_range(hp1_cheb_) + hp1_cheb_err_),
                        hp2_min = LOWER(cheb_range(hp2_cheb_) - hp2_cheb_err_),
                        hp3_max = UPPER(cheb_range(hp3_cheb_) + hp3_cheb_err_);
-            assert(hp1_max < 0 && hp2_min > 0 && hp3_max < 0);
+            verify(hp1_max < 0 && hp2_min > 0 && hp3_max < 0);
             std::cout << "  ... done. h'(x) <= " << hp1_max << ", h''(x) >= " << hp2_min
                 << ", h'''(x) <= " << hp3_max << " ∎\n"
                 << "\nSanity check: h'(1) is " << Hp1(1)
@@ -164,7 +164,7 @@ class LSV : public BaseLSV {
             } else if (n==4) {
                 return fp_c4_ * pow(x, gamma_ - 3);
             } else {
-                assert(n >= 0 && n <= 4);
+                verify(n >= 0 && n <= 4);
                 return 0;
             }
         }
@@ -184,15 +184,15 @@ class LSV : public BaseLSV {
         }
         // derivatives of h(x) on [1/2,1]
         interval_t Hp1 (const interval_t &x) {
-            assert(LOWER(x) >= HALF && UPPER(x) <= 1);
+            verify(LOWER(x) >= HALF && UPPER(x) <= 1);
             return hp1_cheb_.value(x) + interval_t(-1,1) * hp1_cheb_err_;
         }
         interval_t Hp2 (const interval_t &x) {
-            assert(LOWER(x) >= HALF && UPPER(x) <= 1);
+            verify(LOWER(x) >= HALF && UPPER(x) <= 1);
             return hp2_cheb_.value(x) + interval_t(-1,1) * hp2_cheb_err_;
         }
         interval_t Hp3 (const interval_t &x) {
-            assert(LOWER(x) >= HALF && UPPER(x) <= 1);
+            verify(LOWER(x) >= HALF && UPPER(x) <= 1);
             return hp3_cheb_.value(x) + interval_t(-1,1) * hp3_cheb_err_;
         }
 
@@ -204,7 +204,7 @@ class LSV : public BaseLSV {
             } else if (q == "alpha" || q == "alpha-" || q == "alpha+") {
                 real_t a1 = bmp::upper(1 / interval_t(bmp::upper(gamma_))),
                        a2 = bmp::lower(1 / interval_t(bmp::lower(gamma_)));
-                assert(a1 < a2);
+                verify(a1 < a2);
                 interval_t alpha(a1, a2);
                 auto [s1, s2] = interval_inner_string(alpha, 5);
                 if (q == "alpha-") {
@@ -249,7 +249,7 @@ class LSV : public BaseLSV {
             // mpfr_snprintf with size 0 returns the required string length,
             // excluding the null terminator
             int len = mpfr_snprintf(nullptr, 0, fmt, nn, x.backend().data());
-            assert(len >= 0);
+            verify(len >= 0);
 
             std::string r(len + 1, '\0');
             mpfr_snprintf(r.data(), len + 1, fmt, nn, x.backend().data());
@@ -260,7 +260,7 @@ class LSV : public BaseLSV {
         }
         std::pair<std::string, std::string> interval_inner_string(const interval_t &x, int n) {
             real_t w = bmp::width(x);
-            assert(w > 0);
+            verify(w > 0);
             int nn = n + std::max(0, -int(log10(w)));
             return {
                 real_to_string(bmp::lower(x), nn, true),
@@ -271,7 +271,7 @@ class LSV : public BaseLSV {
 };
 
 void LSV::compute_F() {
-    assert(computation_step_ == 4); computation_step_++;
+    verify(computation_step_ == 4); computation_step_++;
 
     std::cout << "\nIf all those numbers meant something, what would it be?\n"
         << "  ....  ....  ....  Ah, yes!\n\n";
@@ -302,7 +302,7 @@ void LSV::compute_F() {
 
         interval_t q = abel.C1 / abel_am1;
         interval_t R = 1 - pow(q + varkappa1 * (1 + q), 2);
-        assert(R > 0);
+        verify(R > 0);
         R = sqrt(R);
 
         interval_t r_star_1 = abel.r1 + nu / abel_am1,
@@ -360,7 +360,7 @@ void LSV::compute_F() {
             F2_minus_ = LOWER((gamma_ * (gamma_ + 1) * M0 - delta2) / (M0 + delta0));
             F3_minus_ = LOWER((gamma_ * (gamma_ + 1) * (gamma_ + 2) * M0 - delta3) / (M0 + delta0));
 
-            assert(LOWER(M0 - delta0) > 0);
+            verify(LOWER(M0 - delta0) > 0);
 
             F1_plus_ = UPPER((gamma_ * M0 + delta1) / (M0 - delta0));
             F2_plus_ = UPPER((gamma_ * (gamma_ + 1) * M0 + delta2) / (M0 - delta0));
@@ -368,7 +368,7 @@ void LSV::compute_F() {
         }
 
         // Verify the lower bounds are strictly positive
-        assert(F1_minus_ > 0 && F2_minus_ > 0 && F3_minus_ > 0);
+        verify(F1_minus_ > 0 && F2_minus_ > 0 && F3_minus_ > 0);
 
         interval_t F1_minus_x = LOWER(F1_minus_ / pow(x_star_, 1)),
                    F2_minus_x = LOWER(F2_minus_ / pow(x_star_, 2)),
@@ -404,7 +404,7 @@ void LSV::compute_F() {
 } // computing F_k
 
 void LSV::compute_derivative_bounds() {
-    assert(computation_step_ == 6); computation_step_++;
+    verify(computation_step_ == 6); computation_step_++;
     std::cout << "But what do I do for x in (0,1/2]? Can I escape somehow?\n\n";
 
     std::cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on (0, 1].\n"
@@ -519,7 +519,7 @@ void LSV::compute_derivative_bounds() {
                     + 10*c0*f2*f3m/pow(F1, 6) - (4*C_prime*F3p + hp_u*F4m)/pow(f1, 5)
                     - 10*hp_u*F2*F3p/pow(f1, 6) - ONE/16 * Hp3(h_fq) );
 
-            assert(C(k, 0) > 0 && C(k, 1) > 0 && C(k, 2) > 0 && C(k, 3) > 0);
+            verify(C(k, 0) > 0 && C(k, 1) > 0 && C(k, 2) > 0 && C(k, 3) > 0);
     }
 
     // find the maximum of h'''
@@ -607,14 +607,14 @@ void LSV::compute_derivative_bounds() {
 
     std::cout << "\n  ....  hmmmmm  ....  \n\n";
 
-    assert(min_hp_h_prime_ > 0 && max_hpp_h_prime_ < 0);
+    verify(min_hp_h_prime_ > 0 && max_hpp_h_prime_ < 0);
 
 } // derivative bounds
 
 LSV::interval_t LSV::function_range(const LSV::interval_t& x1, const LSV::interval_t& x2,
         const LSV::interval_t& y1, const LSV::interval_t& y2,
         const LSV::interval_t& m1) {
-    assert(x1 <= x2);
+    verify(x1 <= x2);
     interval_t mean_y = (y1 + y2) / 2,
                max_dev = m1 * (x2 - x1) / 2;
 
@@ -624,7 +624,7 @@ LSV::interval_t LSV::function_range(const LSV::interval_t& x1, const LSV::interv
 LSV::interval_t LSV::derivative_range(const LSV::interval_t& x1, const LSV::interval_t& x2,
         const LSV::interval_t& y1, const LSV::interval_t& y2,
         const LSV::interval_t& m2) {
-    assert(x1 <= x2);
+    verify(x1 <= x2);
 
     interval_t dx = x2 - x1;
     interval_t mean_slope = (y2 - y1) / dx;
@@ -641,7 +641,7 @@ LSV::interval_t LSV::second_derivative_range(
         const LSV::interval_t& x1, const LSV::interval_t& x2, const LSV::interval_t& x3,
         const LSV::interval_t& y1, const LSV::interval_t& y2, const LSV::interval_t& y3,
         const LSV::interval_t& m3) {
-    assert(x1 <= x2 && x2 <= x3);
+    verify(x1 <= x2 && x2 <= x3);
 
     interval_t dx12 = x2 - x1;
     interval_t dx23 = x3 - x2;

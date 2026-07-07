@@ -49,7 +49,7 @@ int main() {
         cout << "  x: " << x << ", h(x) computed from infinite sum: " << hx
             << "  h(x) from Chebyshev: " << lsv.H(x) << "\n"
             << "  diff: " << err << "\n";
-        assert(err < 1e-4);
+        verify(err < 1e-4);
     }
 
     // 5

@@ -4,8 +4,9 @@
 #include <complex>
 #include <type_traits>
 #include <unsupported/Eigen/FFT>
-#include <cassert>
 #include <functional>
+
+#include "verify.h"
 
 namespace cheb_ns {
 
@@ -51,7 +52,7 @@ class Cheb {
             a_ = a;
             b_ = b;
             N_ = N;
-            assert ( N_ > 0 && a_ < b_);
+            verify( N_ > 0 && a_ < b_);
 
             bpa_ = b_ + a_;
             bpa2_ = bpa_ / 2;
@@ -100,7 +101,7 @@ class Cheb {
         }
 
         void set_from_values(const VectorXr &values) {
-            assert(values.size() == N_);
+            verify(values.size() == N_);
 
             coef_ = kissDCT2(values) * 2 * Ni_;
         }
@@ -205,8 +206,8 @@ class Cheb {
         // For x \in [a,b] and \beta > -1, compute
         //     \int_a^x (t - a)^\beta basis_values(t) dt
         VectorXr beta_integral(const real_t &beta, const real_t &x, int N) const {
-            assert(beta > real_t(-1));
-            assert(N > 0);
+            verify(beta > real_t(-1));
+            verify(N > 0);
 
             const real_t y = (2 * x - bpa_) * bmai_,
                   y1b1 = pow(y + 1, beta + 1);

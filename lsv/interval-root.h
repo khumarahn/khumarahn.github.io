@@ -16,6 +16,7 @@
 #include <boost/multiprecision/detail/default_ops.hpp>
 #include <boost/multiprecision/eigen.hpp>
 
+#include "verify.h"
 
 namespace interval_root_ns {
 
@@ -95,7 +96,7 @@ bool c_proper_subset(const complex_interval_t<d10> &a, const complex_interval_t<
 
 template <unsigned d10>
 VectorXi<d10> intersect(const VectorXi<d10> &a, const VectorXi<d10> &b) {
-    assert(a.size() == b.size());
+    verify(a.size() == b.size());
     const int N = a.size();
     VectorXi<d10> r(N);
     for (int i=0; i<N; i++) {
@@ -106,7 +107,7 @@ VectorXi<d10> intersect(const VectorXi<d10> &a, const VectorXi<d10> &b) {
 
 template <unsigned d10>
 bool subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
-    assert(a.size() == b.size());
+    verify(a.size() == b.size());
     const int N = a.size();
     for (int i=0; i<N; i++) {
         if (!bmp::subset(a(i),b(i))) {
@@ -118,7 +119,7 @@ bool subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
 
 template <unsigned d10>
 bool v_proper_subset(const VectorXi<d10> &a, const VectorXi<d10> &b) {
-    assert(a.size() == b.size());
+    verify(a.size() == b.size());
     bool proper = false;
     const int N = a.size();
     for (int i=0; i<N; i++) {
@@ -164,7 +165,7 @@ Vector2i<d10> interval_newton(const f_t &f, const interval_t<d10> &guess) {
     }
 
     // Sanity check: image of the returned interval contains zero
-    assert(bmp::subset(i_t(0), f(Y)(0)));
+    verify(bmp::subset(i_t(0), f(Y)(0)));
 
     return V2i_t(Y, 1 / P);
 }
@@ -196,7 +197,7 @@ Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &gue
              Y = c_t(1) / median(fpX), // can be optimized
              K = y - Y * f(y)(0) + (ci_t(1) - Y * fpX) * Z;
 
-        assert(overlap(X, K));
+        verify(overlap(X, K));
         ci_t XX = intersect(X, K);
 
         if (!c_proper_subset(XX,X)) {
@@ -206,7 +207,7 @@ Vector2ci<d10> complex_krawczyk(const f_t &f, const complex_interval_t<d10> &gue
         X = XX;
     }
 
-    assert(subset(ci_t(0), fX(0)));
+    verify(subset(ci_t(0), fX(0)));
 
     return V2ci_t(X, ci_t(1) / fX(1));
 }
@@ -222,7 +223,7 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     using Mi_t = MatrixXi<d10>;
     using Vi_t = VectorXi<d10>;
 
-    assert(A.rows() == A.cols());
+    verify(A.rows() == A.cols());
     const int N = A.cols();
 
     // norm
@@ -257,13 +258,13 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
 
     Mi_t E = Mi_t::Identity(N,N) - Y * A;
     i_t normE = norm(E);
-    assert(normE < 1);
+    verify(normE < 1);
 
     i_t x0 = i_t(-1, 1) * norm(Y * b) / (1 - normE);
     Vi_t X = Vi_t::Constant(N, x0);
 
     // check that the initial interval X makes sense
-    assert(subset(b, Vi_t(A * X)));
+    verify(subset(b, Vi_t(A * X)));
 
     for (;;) {
         Vi_t XX = Y * b + E * X,
@@ -278,7 +279,7 @@ VectorXi<d10> linear_krawczyk(const MatrixXi<d10> &A, const VectorXi<d10> &b) {
     //std::cout << "Linear Kraw, error norm: " << norm(A * X - b) << "\n";
 
     // check that the initial interval X makes sense
-    assert(subset(b, Vi_t(A * X)));
+    verify(subset(b, Vi_t(A * X)));
 
     return X;
 }
@@ -290,7 +291,7 @@ interval_t<d10> matrix_sigma_bounds(const MatrixXi<d10> &W, bool only_top = fals
     using i_t = interval_t<d10>;
     using Mi_t = MatrixXi<d10>;
 
-    assert(W.rows() == W.cols());
+    verify(W.rows() == W.cols());
     const int n = W.rows();
 
     Mi_t WtW = W.transpose() * W;
@@ -330,7 +331,7 @@ interval_t<d10> matrix_L2_norm(const MatrixXi<d10> &Q) {
     using M_t = MatrixXr<d10>;
     using Mi_t = MatrixXi<d10>;
 
-    assert(Q.rows() == Q.cols());
+    verify(Q.rows() == Q.cols());
     const int n = Q.rows();
 
     // median
@@ -371,7 +372,7 @@ interval_t<d10> matrix_L2_norm(const MatrixXi<d10> &Q) {
           sigma_V = matrix_sigma_bounds(V),
           sigma_S = matrix_sigma_bounds(S, true);
 
-    assert(sigma_U > 0 && sigma_V > 0);
+    verify(sigma_U > 0 && sigma_V > 0);
 
     //std::cout << "sigma_U: " << sigma_U << ", sigma_V: " << sigma_V << ", sigma_S: " << sigma_S << "\n"
     //    << S.topLeftCorner(5,5) << "\n";
