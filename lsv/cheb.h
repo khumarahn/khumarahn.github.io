@@ -86,7 +86,7 @@ class Cheb {
             return coef_.size() == 0 ? VectorXr::Zero(N_) : coef_;
         };
         real_t coef(int n) const {
-            return (n < coef_.size()) ? coef_(n) : real_t(0);
+            return (n >= 0 && n < coef_.size()) ? coef_(n) : real_t(0);
         }
         real_t a() const {return a_; };
         real_t b() const {return b_; };
@@ -229,15 +229,56 @@ class Cheb {
             return I;
         }
 
+        // For x \in (a,b], compute
+        //     \int_a^x log(t - a) basis_values(t) dt
+        VectorXr log_integral(const real_t &x, int N) const {
+            using std::log;
+            verify(N > 0);
+            verify(x > a_);
+
+            const real_t y = (2 * x - bpa_) * bmai_, yp1 = y + 1,
+                  log_yp1 = log(yp1);
+            const VectorXr bv = basis_values_trig(x, N);
+
+            VectorXr I0(N);
+            VectorXr L(N);
+
+            // Base cases for j = 0
+            I0(0) = yp1;
+            L(0) = yp1 * log_yp1 - yp1;
+
+            // Base cases for j = 1
+            if (N > 1) {
+                I0(1) = yp1 * yp1 / 2 - I0(0);
+                L(1) = (yp1 * yp1 / 2) * log_yp1 - yp1 * yp1 / 4 - L(0);
+            }
+
+            // Coupled recurrence relation for higher orders
+            for (int j = 2; j < N; j++) {
+                I0(j) = ( (j - 3) * I0(j - 2) 
+                        - bv(j - 1) * 2 * (1 - y) * yp1 ) / (j + 1);
+
+                L(j)  = ( (j - 3) * L(j - 2) - I0(j) + 2 * I0(j - 1) - I0(j - 2) 
+                        - bv(j - 1) * 2 * (1 - y) * yp1 * log_yp1 ) / (j + 1);
+            }
+
+            VectorXr J(N);
+            const real_t log_bma2 = log(bma2_);
+
+            // Assemble the final integral
+            for (int j = 0; j < N; j++) {
+                J(j) = bma2_ * log_bma2 * I0(j) + bma2_ * L(j);
+            }
+
+            J(0) /= 2;
+            return J;
+        }
+
         // An upper bound on the sup norm in a Bernstein ellipse with parameter rho,
         // scaled to have the foci at a and b
         real_t ellipse_norm(const real_t &rho) const {
             int N = coef_.size();
             if (N == 0) return 0;
-            // major semi-axes
-            real_t M = (rho + 1 / rho) / 4 * (b_ - a_);
-            // left point
-            real_t x = (a_ + b_) / 2 - M;
 
             real_t r = abs(coef_(0)) / 2;
             for (int k = 1; k < N; k++)
