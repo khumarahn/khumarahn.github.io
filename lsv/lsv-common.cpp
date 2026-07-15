@@ -144,6 +144,13 @@ class LSV : public BaseLSV {
         // 6
         void compute_derivative_bounds();
 
+        // experimental area
+        void experimental() {
+            std::cout << "\n ** EXPERIMENTAL **\n";
+            VectorXi tau = tau_sum(0.501);
+            std::cout << h_cheb_.coef().dot(tau) << "\n";
+        }
+
         double double_gamma() const {
             return double(bmp::median(BaseLSV::gamma()));
         }
@@ -174,14 +181,18 @@ class LSV : public BaseLSV {
             if (LOWER(x) >= HALF) {
                 return h_cheb_.value(x) + interval_t(-1, 1) * h_cheb_err_A_;
             } else {
+                auto cs = cheb_sum(x);
                 // sum without an error
-                interval_t S = cheb_sum(x).transpose() * h_cheb_.coef();
+                interval_t S = cs.transpose() * h_cheb_.coef();
                 // the error
-                interval_t E = eps_sum(x, h_cheb_err_A_);
+                // FIXME:: CHECK THAT THIS IS A CORRECT ERROR BOUND VERY CAREFULLY
+                interval_t E = 2 * cs(0) * h_cheb_err_A_;
+                E = interval_t(-1, 1) * bmp::upper(E);
 
                 return (S + E) / 2;
             }
         }
+
         // derivatives of h(x) on [1/2,1]
         interval_t Hp1 (const interval_t &x) {
             verify(LOWER(x) >= HALF && UPPER(x) <= 1);

@@ -110,6 +110,8 @@ class LSV {
             interval_t nu;
             // \leq (a_{-1} - C_1) / (a_{-1} + C_1)
             interval_t varkappa0;
+            // \leq varkappa0
+            interval_t varkappa1;
             // max of \kappa(w) / \kappa(w + s \zeta),
             // as used in the bound on C_\psi
             interval_t max_kappa_ratio;
@@ -155,11 +157,9 @@ class LSV {
         VectorXci derivatives_s_,
                   derivatives_c_;
 
-        // Constant part of error in evaluation of sums for
+        // common part of error in evaluation of sums for
         // first N_ basis Chebyshev polynomials
         VectorXi cheb_sum_small_const_error_;
-        // Constant part of error in evaluation of sums of small functions
-        interval_t eps_sum_small_const_error_;
         void compute_sum_small_const_error();
 
         void compute_derivatives_cs() {
@@ -173,7 +173,7 @@ class LSV {
             s.resize(abel_.halfM);
             c.resize(abel_.halfM);
 
-            interval_t tau = abel_.varkappa0 * abel_.nu / e_;
+            interval_t tau = abel_.varkappa1 * abel_.nu / e_;
 
             const VectorXi B2 = bernoulli2k(abel_.L);    // B2(ell) = B_{2 ell}
 
@@ -274,7 +274,8 @@ class LSV {
                 << "    .r1: " << abel_.r1
                 << ", .C1: " << abel_.C1
                 << ", .C2: " << abel_.C2 << "\n"
-                << "    .varkappa0: " << abel_.varkappa0 << "\n"
+                << "    .varkappa0: " << abel_.varkappa0
+                << ", .varkappa1: " << abel_.varkappa1 << "\n"
                 << "    .am1_minus_C1: " << abel_.am1_minus_C1
                 << ", .dist_P1_to_A: " << abel_.dist_P1_to_A << "\n"
                 << "    .L: " << abel_.L << ", .M: " << abel_.M << "\n"
@@ -293,7 +294,8 @@ class LSV {
                 << "    .r1: " << abel_rough_.r1
                 << ", .C1: " << abel_rough_.C1
                 << ", .C2: " << abel_rough_.C2 << "\n"
-                << "    .varkappa0: " << abel_rough_.varkappa0 << "\n"
+                << "    .varkappa0: " << abel_.varkappa0
+                << ", .varkappa1: " << abel_.varkappa1 << "\n"
                 << "    .am1_minus_C1: " << abel_rough_.am1_minus_C1
                 << ", .dist_P1_to_A: " << abel_rough_.dist_P1_to_A << "\n\n";
 
@@ -352,7 +354,6 @@ class LSV {
         VectorXi cheb_sum(const interval_t &x) const {
             VectorXi r = VectorXi::Zero(N_);
 
-            // for integrals only
             const interval_cheb_t cheb(interval_t(1) / 2, 1, 1);
 
             // values of first N Chebyshev polynomials at the
@@ -399,7 +400,7 @@ class LSV {
                     r += der;
                 }
 
-                r += cheb_sum_small_const_error_;
+                r += abel_.max_kappa_ratio * cheb_sum_small_const_error_;
 
                 return r;
             };
@@ -420,37 +421,109 @@ class LSV {
             return r;
         }
 
-        // a bound on the sum S(x) = \sum_{k \geq 0} \varphi((x_k + 1) / 2) / J_k(x_k)
-        // where |\varphi| \leq \eps, and \varphi is analytic in \cP_1
-        interval_t eps_sum(const interval_t &x, const interval_t &eps = 1) const {
-            interval_t r = 0;
+        // compute S(x) = \sum_{k \geq 0} k \varphi(x_k) / J_k(x)
+        // where \varphi is the vector of first N_ Chebyshev basis polynomials on [0,1],
+        // only for gamma_ < 1
+        VectorXi tau_sum(const interval_t &x) const {
+            verify(gamma_ < 1);
 
-            interval_t xk = x,
-                       inv_Jk = 1;
+            VectorXi r = VectorXi::Zero(N_);
+
+            const interval_cheb_t cheb(0, 1, 1);
+
+            // values of first N Chebyshev polynomials
+            auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
+                return cheb.basis_values_trig(x, N_);
+            };
+
+            // for a **small** real x, and K \geq 0, approximate \sum_{k \ge 0} \psi(k)
+            // where \psi(k) = (k + K) \varphi(x_k) / J_k(x)
+            auto S_small = [this, &cheb, &phi](const interval_t &x, int K) -> VectorXi {
+                VectorXi r = VectorXi::Zero(N_);
+                Vector2i Ax = this->abel(x);
+
+                // \gamma a_\ell \int_0^x \log(u) \varphi(u) du
+                VectorXi Ilog = gamma_ * abel_.coef(1) * cheb.log_integral(x, N_);
+
+                // \sum_{j=-1}^{n} a_j \int_0^x u^{\gamma j} \varphi(u) du
+                // + \int_0^x (-A(x) + K) \varphi(u) du
+                VectorXi Ipow = VectorXi::Zero(N_);
+                for (int j = -1; j <= abel_.n; j++) {
+                    interval_t c = (j == -1) ? abel_.coef(0) : abel_.coef(2 + j);
+                    if (j == 0) {
+                        c += -Ax(0) + K;
+                    }
+                    Ipow += c * cheb.beta_integral(j * gamma_, x, N_);
+                }
+                
+                // I = - A'(x) \int_0^x (A(u) - A(x) + K) \varphi(u) du
+                VectorXi I = -Ax(1) * (Ilog + Ipow);
+
+                // integral term error
+                interval_t Ierr = abs(Ax(1)) * abel_.C0
+                    * pow(x, abel_.n * gamma_ + 1) / (abel_.n * gamma_ + 1);
+                Ierr = interval_t(-1, 1) * bmp::upper(Ierr);
+                for (int j = 0; j < N_; j++) {
+                    I(j) += Ierr;
+                }
+
+                r += I;
+
+                // boundary term
+                r += K * phi(x) / 2;
+
+                // derivatives
+                const VectorXci &s = derivatives_s_, &c = derivatives_c_;
+
+                VectorXi der = VectorXi::Zero(N_);
+                for (int m = 1; m <= abel_.halfM; m++) {
+                    Vector2ci aws = abel_inv(Ax(0) + s(m-1));
+                    der += ((c(m-1) * aws(1) * (s(m-1) + complex_interval_t(K))) * phi(aws(0))).real();
+                }
+                der *= - Ax(1) / abel_.halfM;
+                r += der;
+
+                // EM error
+                VectorXi EE(N_);
+                {
+                    const interval_t
+                        &vk0 = abel_.varkappa0,
+                        &vk1 = abel_.varkappa1,
+                        &nu  = abel_.nu,
+                        &am1 = abel_.coef(0),
+                        &C1  = abel_.C1;
+                    interval_t t = pow(x, -gamma_),
+                               Bi = (am1 - C1) / (vk0 - vk1),
+                               C = nu * vk1 / (am1 - C1);
+                    verify(bmp::lower(t) > bmp::upper(C));
+
+                    interval_t F = (am1 + C1) / (am1 - C1) * pow(t, 1 + gamma_inv_)
+                        * ((1 + vk1) * Bi + (K + vk1 * nu) / (t - C)) * pow(t - C, -gamma_inv_);
+                    F = bmp::upper(F);
+                    EE = F * cheb_sum_small_const_error_;
+                }
+
+                r += EE;
+
+                return r;
+            };
+
+            interval_t xk = x;
+            interval_t inv_Jk = 1;
+            int K = 0;
 
             // add branches naively up to Nstar
             while (bmp::upper(xk) > abel_.x_Nstar) {
-                r += inv_Jk;
+                r += (K * inv_Jk) * phi(xk);
                 Vector2i y = left_inv(xk);
                 xk = y(0);
                 inv_Jk *= y(1);
+                K++;
             }
 
-            Vector2i Axk = abel(xk);
-
-            // bound S(xk)
-            interval_t w_minus_nu = Axk(0) - abel_.nu;
-            interval_t tt = abel_t_inv(w_minus_nu)(0);
-            verify(tt > abel_.r1);
-
-            //r += abs(Axk(1) * xk) + interval_t(1) / 2;
-            //r += eps_sum_small_const_error_;
-            interval_t tail_bound = abs(Axk(1) * xk) + interval_t(1) / 2
-                + eps_sum_small_const_error_;
-            r += tail_bound * inv_Jk;
-
-            r *= eps;
-            return interval_t(-1, 1) * bmp::upper(r);
+            // add the rest when xk is small using Euler-Maclaurin
+            r += S_small(xk, K) * inv_Jk;
+            return r;
         }
 
         // Transfer operator for the induced map, the clever one.
@@ -708,9 +781,10 @@ class LSV {
         // * interval A(x)
         template <typename var_t> requires type_one_of<var_t, interval_t, complex_interval_t>
         Vector2<var_t> abel(const var_t &x) const {
-            var_t t = pow(x, -gamma_);
+            const var_t g = gamma_;
+            var_t t = pow(x, -g);
             Vector2<var_t> A = abel_t(t);
-            return Vector2<var_t>(A(0), -gamma_ * (t / x) * A(1));
+            return Vector2<var_t>(A(0), -g * (t / x) * A(1));
         }
 
         // inverse
@@ -804,7 +878,6 @@ class LSV {
 
             return r;
         }
-
 
         // Akiyama–Tanigawa algorithm for even Bernoulli numbers B_{2 k}, k = 0, 1, ..., p
         static VectorXi bernoulli2k(int p) {
@@ -1075,6 +1148,12 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
         abel.varkappa0 = (am1 - abel.C1) / (am1 + abel.C1);
         abel.varkappa0 = bmp::lower(abel.varkappa0);
 
+        // TODO: some EM sums work better with varkappa1 = varkappa0, while
+        // other sums need varkappa1 < varkappa0. We could treat them
+        // separately, but this requires separate sets of all constants
+        abel.varkappa1 = 15 * abel.varkappa0 / 16;
+        abel.varkappa1 = bmp::lower(abel.varkappa1);
+
         abel.am1_minus_C1 = bmp::lower(i_t(
                     am1 - abel.C1
                     ));
@@ -1093,7 +1172,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
 
     // L, nu, M
     if (!rough) {
-        verify(abel.r1 > 0 && rho_C_ > 0 && abel.varkappa0 > 0 && N_ > 0);
+        verify(abel.r1 > 0 && rho_C_ > 0 && abel.varkappa1 > 0 && N_ > 0);
 
         // exponential factor which should be outweighed by
         // L / (pi e nu varkappa_1)
@@ -1101,7 +1180,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
 
         i_t L_nu_factor = 24 + PREC_ / 16;
         i_t L =  log(fatty) / (2 * log(L_nu_factor));
-        i_t nu = L_nu_factor * L / (e_ * pi_ * abel.varkappa0);
+        i_t nu = L_nu_factor * L / (e_ * pi_ * abel.varkappa1);
 
         abel.L = int(ceil(bmp::upper(L)));
         abel.nu = bmp::upper(nu);
@@ -1131,7 +1210,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
         // compute the minimal t for which this factor works,
         i_t t_good_for_kappa;
         {
-            i_t C = abel.varkappa0 * abel.nu / abel.am1_minus_C1,
+            i_t C = abel.varkappa1 * abel.nu / abel.am1_minus_C1,
                 D = 1 + 2 * abel.C1 / abel.am1_minus_C1,
                 E = pow(abel.max_kappa_ratio / D, gamma_ / (gamma_ + 1));
             verify(E > 1);
@@ -1186,14 +1265,14 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     verify( abel.r1 > abel.r_good );
     verify( abel.C1 > 0 );
     verify( abel.C2 > 0 );
-    verify( abel.varkappa0 > 0 );
+    verify( abel.varkappa0 > abel.varkappa1 && abel.varkappa1 > 0 );
     verify( abel.am1_minus_C1 > 0 );
     if (!rough) {
         verify( abel.nu > 0 );
         verify( abel.x_Nstar > 0 );
         verify( abel.L > 0 && abel.halfM >= abel.L
                 && abel.M == 2 * abel.halfM);
-        verify(2 * pi_ * e_ * abel.nu * abel.varkappa0 > 2 * abel.L - 1);
+        verify(2 * pi_ * e_ * abel.nu * abel.varkappa1 > 2 * abel.L - 1);
     }
 
     return abel;
@@ -1204,7 +1283,7 @@ template <int PREC>
 void LSV<PREC>::compute_sum_small_const_error() {
     const interval_t
         &nu = abel_.nu,
-        &vk = abel_.varkappa0;
+        &vk = abel_.varkappa1;
 
     interval_t Lfac = 1;
     for (int ell = 1; ell <= 2 * abel_.L + 1; ell++)
@@ -1213,20 +1292,6 @@ void LSV<PREC>::compute_sum_small_const_error() {
     // R_L term without C_\psi
     interval_t R_L = Lfac * nu
         / (abel_.L * pow(2 * pi_ * nu * vk, 2 * abel_.L + 1));
-
-    // small observables
-    {
-        interval_t &c_eps = eps_sum_small_const_error_;
-        c_eps = R_L;
-
-        const VectorXi B2 = bernoulli2k(abel_.L);    // B2(ell) = B_{2 ell}
-
-        for (int j = 1; j <= abel_.L; j++)
-            c_eps += abs(B2(j)) / (2 * j * pow(nu * vk, 2 * j - 1));
-
-        // kappa factor of C_\psi
-        c_eps *= abel_.max_kappa_ratio;
-    }
 
     // Chebyshev polynomials
     interval_t E = R_L;
@@ -1238,16 +1303,13 @@ void LSV<PREC>::compute_sum_small_const_error() {
           (exp(interval_t(abel_.M)) - 1)
         );
 
-    // kappa factor of C_\psi
-    E *= abel_.max_kappa_ratio;
-
     // maxima of Chebyshev polynomials in the petal Re(t) > r1
     VectorXi cheb_max_r1(N_);
     {
-        interval_t rr = 2 * pow(abel_.r1, - gamma_inv_),
-                   tt = 1 + rr + sqrt(pow(rr + 1, 2) - 1);
+        interval_t q = 2 * pow(abel_.r1, - gamma_inv_),
+                   qq = 1 + q + sqrt(pow(q + 1, 2) - 1);
         for (int i = 0; i < N_; i++)
-            cheb_max_r1(i) = (pow(tt, i) + pow(tt, -i)) / 2;
+            cheb_max_r1(i) = (pow(qq, i) + pow(qq, -i)) / 2;
     }
 
     VectorXi EE = E * cheb_max_r1;

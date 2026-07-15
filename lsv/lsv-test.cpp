@@ -23,7 +23,8 @@ int main() {
     const interval_t ONE = lsv.ONE, HALF = lsv.HALF;
 
     // 0
-    lsv.set_alpha(0.875);
+    //lsv.set_alpha(0.875);
+    lsv.set_alpha(1.125);
     // 1
     lsv.compute_L();
     // 2
@@ -61,6 +62,9 @@ int main() {
         << lsv.oracle("max_hpp_h_prime") << "\n"
         << lsv.oracle("alpha") << "\n"
         << lsv.oracle("gamma") << "\n";
+
+    // experiment
+    lsv.experimental();
 
     return 0;
 }
