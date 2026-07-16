@@ -354,16 +354,13 @@ class LSV {
         VectorXi cheb_sum(const interval_t &x) const {
             VectorXi r = VectorXi::Zero(N_);
 
-            const interval_cheb_t cheb(interval_t(1) / 2, 1, 1);
+            const interval_cheb_t cheb(0, 1, 1);
 
-            // values of first N Chebyshev polynomials at the
-            // preimage on [1/2,1]
+            // values of first N Chebyshev polynomials on [0,1]
             auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
-                var_t y = this->right_inv(x)(0);
                 // slow trigonometric evaluation is more precise
                 // in interval arithmetic
-                VectorX<var_t> r = cheb.basis_values_trig(y, N_);
-                return r;
+                return cheb.basis_values_trig(x, N_);
             };
 
             // for a **small** real x, return a rigorous approximation of S(z) = S(x^\gamma)
@@ -374,9 +371,8 @@ class LSV {
                 Vector2i Ax = this->abel(x);
 
                 {   // integral
-                    interval_t y = this->right_inv(x)(0);
-                    VectorXi bi = cheb.beta_integral(0, y, N_);
-                    r -= 2 * Ax(1) * bi;
+                    VectorXi bi = cheb.beta_integral(0, x, N_);
+                    r -= Ax(1) * bi;
                 }
 
                 // \varphi(z) / 2
