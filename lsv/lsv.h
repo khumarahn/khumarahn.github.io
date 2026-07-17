@@ -133,9 +133,8 @@ class LSV {
         };
 
     protected:
-        interval_t gamma_;
-    private:
-        interval_t gamma_inv_;
+        interval_t gamma_,
+                   gamma_inv_;
 
         MatrixXi abel_matrix(int n) const;
         void compute_ellipses();
@@ -262,6 +261,8 @@ class LSV {
                 << ", rho_C_plus_: " << rho_C_plus_ << "\n"
                 << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio)
                 << ", rho_C_ / rho_A_: " << bmp::lower(CA_ratio) << "\n"
+                << "  norm_point_A_: " << norm_point_A_
+                << ", norm_point_C_: " << norm_point_C_ << "\n"
                 << "  abel_:\n"
                 << "    .coef_ni: " << abel_.coef_ni(0)
                 << ", " << abel_.coef_ni(1) << ", " << abel_.coef_ni(2)
@@ -371,7 +372,7 @@ class LSV {
                 Vector2i Ax = this->abel(x);
 
                 {   // integral
-                    VectorXi bi = cheb.beta_integral(0, x, N_);
+                    VectorXi bi = cheb.beta_integral_trig(0, x, N_);
                     r -= Ax(1) * bi;
                 }
 
@@ -417,7 +418,7 @@ class LSV {
             return r;
         }
 
-        // compute S(x) = \sum_{k \geq 0} k \varphi(x_k) / J_k(x)
+        // compute S(x) = \sum_{k \geq 0} (k + 1) \varphi(x_k) / J_k(x)
         // where \varphi is the vector of first N_ Chebyshev basis polynomials on [0,1],
         // only for gamma_ < 1
         VectorXi tau_sum(const interval_t &x) const {
@@ -439,7 +440,7 @@ class LSV {
                 Vector2i Ax = this->abel(x);
 
                 // \gamma a_\ell \int_0^x \log(u) \varphi(u) du
-                VectorXi Ilog = gamma_ * abel_.coef(1) * cheb.log_integral(x, N_);
+                VectorXi Ilog = - gamma_ * abel_.coef(1) * cheb.log_integral_trig(x, N_);
 
                 // \sum_{j=-1}^{n} a_j \int_0^x u^{\gamma j} \varphi(u) du
                 // + \int_0^x (-A(x) + K) \varphi(u) du
@@ -449,7 +450,7 @@ class LSV {
                     if (j == 0) {
                         c += -Ax(0) + K;
                     }
-                    Ipow += c * cheb.beta_integral(j * gamma_, x, N_);
+                    Ipow += c * cheb.beta_integral_trig(j * gamma_, x, N_);
                 }
                 
                 // I = - A'(x) \int_0^x (A(u) - A(x) + K) \varphi(u) du
@@ -506,7 +507,7 @@ class LSV {
 
             interval_t xk = x;
             interval_t inv_Jk = 1;
-            int K = 0;
+            int K = 1;
 
             // add branches naively up to Nstar
             while (bmp::upper(xk) > abel_.x_Nstar) {
@@ -533,14 +534,14 @@ class LSV {
             MatrixXi L_values(N_, N_);
 #pragma omp parallel for schedule(dynamic)
             for (int ix = 0; ix < x_nodes.size(); ix++) {
-                interval_t x = x_nodes[ix];
+                interval_t x = x_nodes(ix);
                 L_values.col(ix) = cheb_sum(x) / interval_t(2);
             }
 
             // Approximate the result with Chebyshev polynomials
             MatrixXi R(N_, N_);
             {
-                interval_cheb_t c(interval_t(1) / 2, 1, N_);
+                interval_cheb_t c(HALF, 1, N_);
                 for (int k = 0; k < N_; k++) {
                     c.set_from_values(L_values.row(k).transpose());
                     VectorXi cc = c.coef();
@@ -588,7 +589,7 @@ class LSV {
 
             // iota is a vector of values of integrals on [1/2,1] of the basis
             // Chebyshev polynomials
-            VectorXi iota = cheb.beta_integral(0, b, N);
+            VectorXi iota = cheb.beta_integral_trig(0, b, N);
 
             VectorXi u = VectorXi::Zero(N);
             u(0) = 1 / iota(0);

@@ -17,7 +17,6 @@ class LSV : public BaseLSV {
 
         interval_t
             h_cheb_err_A_,   // error of the approximation of h in A
-            rho_A_,
             dist_half_A_,    // distance from 1/2 to the boundary of A
             h_sup_A_;        // sup norm of h on A
 
@@ -60,13 +59,15 @@ class LSV : public BaseLSV {
 
     public:
         void set_alpha(double alpha) {
-            std::cout << "\nThe user wants me to compute the invariant measure for\n"
-                << "the LSV map. This is Liverani-Saussol-Vaienti.\n"
-                << "Wait, who are these people, and why me?\n\n";
-
             interval_t gamma = 1 / (
                     alpha + interval_t(-1,1) * 1e-50
                     );
+            set_gamma(gamma);
+        }
+        void set_gamma(interval_t gamma) {
+            std::cout << "\nThe user wants me to compute the invariant measure for\n"
+                << "the LSV map. This is Liverani-Saussol-Vaienti.\n"
+                << "Wait, who are these people, and why me?\n\n";
 
             BaseLSV::set_gamma(gamma);
 
@@ -102,7 +103,6 @@ class LSV : public BaseLSV {
             std::cout << "\nI do not want to think anymore, I just want to crunch...\n"
                 << "... number ... number ... number ... number ...\n";
             h_cheb_ = h_meta_.h;
-            rho_A_ = h_meta_.rho_A;
 
             dist_half_A_ = (rho_A_ + 1 / rho_A_ - 2) / 8;
 
@@ -147,8 +147,30 @@ class LSV : public BaseLSV {
         // experimental area
         void experimental() {
             std::cout << "\n ** EXPERIMENTAL **\n";
-            VectorXi tau = tau_sum(0.501);
-            std::cout << h_cheb_.coef().dot(tau) << "\n";
+
+            const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
+            const VectorXi x_nodes = cheb.nodes();
+            VectorXi iota = cheb.beta_integral_trig(0, 1, N_);
+
+            VectorXi S_values(N_);
+#pragma omp parallel for schedule(dynamic)
+            for (int ix = 0; ix < x_nodes.size(); ix++) {
+                interval_t x = x_nodes(ix);
+                S_values(ix) = h_cheb_.coef().dot(tau_sum(x));
+            }
+            interval_t S_half = 2 * tau_sum(HALF)(0),
+                       S_p = 2 * tau_sum(norm_point_A_)(0);
+            interval_cheb_t S_bh(HALF, 1, N_);
+            S_bh.set_from_values(S_values);
+            interval_t I_tau_bh = S_bh.coef().dot(iota) / 2;
+
+            interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
+                       I_err = h_cheb_err_A_ * S_half / 4
+                + 2 * bh_norm_A * S_p / (pow(rho_A_, N_ - 1) * log(rho_A_));
+
+            interval_t I = I_tau_bh + interval_t(-1, 1) * UPPER(I_err);
+            std::cout << " ^^^ " << real_to_string(bmp::median(I), 100) << " ^^^"
+                << " ^^^ width: " << bmp::width(I) << " ^^^ \n";
         }
 
         double double_gamma() const {
@@ -179,7 +201,7 @@ class LSV : public BaseLSV {
         // h(x) on (0,1] with error
         interval_t H(const interval_t &x) {
             if (LOWER(x) >= HALF) {
-                return h_cheb_.value(x) + interval_t(-1, 1) * h_cheb_err_A_;
+                return h_cheb_.value_trig(x) + interval_t(-1, 1) * h_cheb_err_A_;
             } else {
                 auto cs = cheb_sum(x);
                 // sum without an error
@@ -196,15 +218,15 @@ class LSV : public BaseLSV {
         // derivatives of h(x) on [1/2,1]
         interval_t Hp1 (const interval_t &x) {
             verify(LOWER(x) >= HALF && UPPER(x) <= 1);
-            return hp1_cheb_.value(x) + interval_t(-1,1) * hp1_cheb_err_;
+            return hp1_cheb_.value_trig(x) + interval_t(-1,1) * hp1_cheb_err_;
         }
         interval_t Hp2 (const interval_t &x) {
             verify(LOWER(x) >= HALF && UPPER(x) <= 1);
-            return hp2_cheb_.value(x) + interval_t(-1,1) * hp2_cheb_err_;
+            return hp2_cheb_.value_trig(x) + interval_t(-1,1) * hp2_cheb_err_;
         }
         interval_t Hp3 (const interval_t &x) {
             verify(LOWER(x) >= HALF && UPPER(x) <= 1);
-            return hp3_cheb_.value(x) + interval_t(-1,1) * hp3_cheb_err_;
+            return hp3_cheb_.value_trig(x) + interval_t(-1,1) * hp3_cheb_err_;
         }
 
         std::string oracle(std::string q) {
@@ -682,16 +704,16 @@ LSV::interval_t LSV::cheb_range(const LSV::interval_cheb_t &p) {
              Y(N + 2);
 
     X(0) = interval_t(p.a());
-    Y(0) = p.value(X(0));
+    Y(0) = p.value_trig(X(0));
 
     for(int i = 0; i < N; i++) {
         // reverse because nodes are descending
         X(i + 1) = nodes(N - 1 - i);
-        Y(i + 1) = p.value(X(i + 1));
+        Y(i + 1) = p.value_trig(X(i + 1));
     }
 
     X(N + 1) = interval_t(p.b());
-    Y(N + 1) = p.value(X(N + 1));
+    Y(N + 1) = p.value_trig(X(N + 1));
 
     interval_t min_v = LOWER(Y(0));
     interval_t max_v = UPPER(Y(0));

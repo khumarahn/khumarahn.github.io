@@ -15,6 +15,7 @@ using std::cos;
 using std::acos;
 using std::asin;
 using std::pow;
+using std::log;
 using std::sqrt;
 
 template <typename T, typename... TArgs>
@@ -125,6 +126,16 @@ class Cheb {
             return value(x);
         }
 
+        // it seems, acos in std::complex is computed as
+        // pi/2 - asin(x), with a hardcoded pi/2 with limited precision
+        complex_t safer_acos(const complex_t &z) const {
+            complex_t I(0, 1), one(1, 0);
+            return -I * log(z + I * sqrt((one - z) * (one + z)));
+        }
+        real_t safer_acos(const real_t &x) const {
+            return acos(x);
+        }
+
         // A trigonometric computation of values of basis vectors,
         // does not work on real line outside [-1,1]
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
@@ -132,11 +143,20 @@ class Cheb {
             VectorX<var_t> ret(N);
             ret(0) = half_;
             const var_t y = (x - bpa2_) / bma2_,
-                  z = acos(y);
+                  z = safer_acos(y);
             for (int j = 1; j < N; j++) {
                 ret(j) = cos(real_t(j) * z);
             }
             return ret;
+        }
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        var_t value_trig(const var_t &x) const {
+            int N = coef_.size();
+            if (N == 0) {
+                return 0;
+            } else {
+                return coef_.dot(basis_values_trig(x, N));
+            }
         }
         // optimized computation of value when coef = (0,...,0,1,0,...,0),
         // with 1 at index n
@@ -205,12 +225,13 @@ class Cheb {
 
         // For x \in [a,b] and \beta > -1, compute
         //     \int_a^x (t - a)^\beta basis_values(t) dt
-        VectorXr beta_integral(const real_t &beta, const real_t &x, int N) const {
+        VectorXr beta_integral_trig(const real_t &beta, const real_t &x, int N) const {
             verify(beta > real_t(-1));
             verify(N > 0);
 
             const real_t y = (2 * x - bpa_) * bmai_,
-                  y1b1 = pow(y + 1, beta + 1);
+                  yp1 = 2 * (x - a_) * bmai_,
+                  y1b1 = pow(yp1, beta + 1);
             const VectorXr bv = basis_values_trig(x, N);
 
             VectorXr I(N);
@@ -231,12 +252,11 @@ class Cheb {
 
         // For x \in (a,b], compute
         //     \int_a^x log(t - a) basis_values(t) dt
-        VectorXr log_integral(const real_t &x, int N) const {
+        VectorXr log_integral_trig(const real_t &x, int N) const {
             using std::log;
             verify(N > 0);
             verify(x > a_);
-
-            const real_t y = (2 * x - bpa_) * bmai_, yp1 = y + 1,
+            const real_t y = (2 * x - bpa_) * bmai_, yp1 = 2 * (x - a_) * bmai_,
                   log_yp1 = log(yp1);
             const VectorXr bv = basis_values_trig(x, N);
 
