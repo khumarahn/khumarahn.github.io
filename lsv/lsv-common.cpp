@@ -152,25 +152,59 @@ class LSV : public BaseLSV {
             const VectorXi x_nodes = cheb.nodes();
             VectorXi iota = cheb.beta_integral_trig(0, 1, N_);
 
-            VectorXi S_values(N_);
+            // RETURN TIME
+            interval_t tau;
+            {
+                VectorXi S_values(N_);
 #pragma omp parallel for schedule(dynamic)
-            for (int ix = 0; ix < x_nodes.size(); ix++) {
-                interval_t x = x_nodes(ix);
-                S_values(ix) = h_cheb_.coef().dot(tau_sum(x));
+                for (int ix = 0; ix < x_nodes.size(); ix++) {
+                    interval_t x = x_nodes(ix);
+                    S_values(ix) = h_cheb_.coef().dot(tau_sum(x));
+                }
+                interval_t S_half = 2 * tau_sum(HALF)(0),
+                           S_p = 2 * tau_sum(norm_point_A_)(0);
+                interval_cheb_t S_bh(HALF, 1, N_);
+                S_bh.set_from_values(S_values);
+                interval_t I_tau_bh = S_bh.coef().dot(iota) / 2;
+
+                interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
+                           I_err = h_cheb_err_A_ * S_half / 4
+                               + 2 * bh_norm_A * S_p / (pow(rho_A_, N_ - 1) * log(rho_A_));
+
+                tau = I_tau_bh + interval_t(-1, 1) * UPPER(I_err);
             }
-            interval_t S_half = 2 * tau_sum(HALF)(0),
-                       S_p = 2 * tau_sum(norm_point_A_)(0);
-            interval_cheb_t S_bh(HALF, 1, N_);
-            S_bh.set_from_values(S_values);
-            interval_t I_tau_bh = S_bh.coef().dot(iota) / 2;
 
-            interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
-                       I_err = h_cheb_err_A_ * S_half / 4
-                + 2 * bh_norm_A * S_p / (pow(rho_A_, N_ - 1) * log(rho_A_));
+            // LYAPUNOV EXPONENT
+            interval_t Lambda;
+            {
+                VectorXi S_values(N_);
+#pragma omp parallel for schedule(dynamic)
+                for (int ix = 0; ix < x_nodes.size(); ix++) {
+                    interval_t x = x_nodes(ix);
+                    S_values(ix) = h_cheb_.coef().dot(lambda_sum(x));
+                }
+                interval_cheb_t S_bh(HALF, 1, N_);
+                S_bh.set_from_values(S_values);
+                interval_t I_bh = S_bh.coef().dot(iota);
 
-            interval_t I = I_tau_bh + interval_t(-1, 1) * UPPER(I_err);
-            std::cout << " ^^^ " << real_to_string(bmp::median(I), 100) << " ^^^"
-                << " ^^^ width: " << bmp::width(I) << " ^^^ \n";
+                interval_t R = 2 * lambda_sum(norm_point_A_)(0)
+                    + pi_ * 2 * cheb_sum(norm_point_A_)(0);
+
+                interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
+                           I_err = R * (
+                                   h_cheb_err_A_ / 2
+                                   + 4 * bh_norm_A / (pow(rho_A_, N_ - 1) * log(rho_A_))
+                                   );
+
+                Lambda = I_bh + interval_t(-1, 1) * UPPER(I_err);
+            }
+
+            interval_t lambda = (Lambda / 2 + log(interval_t(2))) / tau;
+            std::cout << "Mean return time: " << real_to_string(bmp::median(tau), 20)
+                << ", width: " << bmp::width(tau) << "\n"
+                << "Lyapunov exponent: " << real_to_string(bmp::median(lambda), 20)
+                << ", width: " << bmp::width(lambda) << "\n"
+                << "exp of Lyapunov exponent: " << real_to_string(bmp::median(interval_t(exp(lambda))), 20) << "\n";
         }
 
         double double_gamma() const {

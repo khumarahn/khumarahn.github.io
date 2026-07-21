@@ -39,6 +39,7 @@ concept type_one_of = (std::same_as<T, TArgs> || ...);
 using std::max;
 using std::pow;
 using std::log;
+using std::log1p;
 using std::ceil;
 using std::floor;
 using std::exp;
@@ -88,7 +89,7 @@ class LSV {
 
         // various constants associated with the Abel function
         // \tA = \tilde{A} and \hA = \hat{A},
-        // \tA_n(t) = a_{-1} + a_\ell + a_0 + a_1 t + ... + a_n t^n
+        // \tA_n(t) = a_{-1} t + a_\ell \log t + a_0 + a_1 / t + ... + a_n / t^n
         struct abel_meta_t {
             // n
             int n;
@@ -452,7 +453,7 @@ class LSV {
                     }
                     Ipow += c * cheb.beta_integral_trig(j * gamma_, x, N_);
                 }
-                
+
                 // I = - A'(x) \int_0^x (A(u) - A(x) + K) \varphi(u) du
                 VectorXi I = -Ax(1) * (Ilog + Ipow);
 
@@ -520,6 +521,123 @@ class LSV {
 
             // add the rest when xk is small using Euler-Maclaurin
             r += S_small(xk, K) * inv_Jk;
+            return r;
+        } // tau_sum
+
+        // compute S(x) = \sum_{k \geq 0} \varphi(x_k) \log(J_k) / J_k(x)
+        // where \varphi is the vector of first N_ Chebyshev basis polynomials on [0,1]
+        VectorXi lambda_sum(const interval_t &x) const {
+
+            VectorXi r = VectorXi::Zero(N_);
+
+            const interval_cheb_t cheb(0, 1, 1);
+
+            // values of first N Chebyshev polynomials
+            auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
+                return cheb.basis_values_trig(x, N_);
+            };
+
+            // for a **small** real x, and K \geq 0, approximate \sum_{k \ge 0} \psi(k)
+            // where \psi(k) = \varphi(x_k) (K + \log J_k(x)) / J_k(x)
+            auto S_small = [this, &cheb, &phi](const interval_t &x, interval_t K) -> VectorXi {
+                interval_t t = pow(x, -gamma_);
+                VectorXi r = VectorXi::Zero(N_);
+                Vector2i Ax = this->abel(x);
+
+                // integral
+                VectorXi I = VectorXi::Zero(N_);
+
+                // two simpler, exact integrals
+                I += (log(- Ax(1) / gamma_) - K) * cheb.beta_integral_trig(0, x, N_);
+                I += (gamma_ + 1) * cheb.log_integral_trig(x, N_);
+
+                // log poly integral
+                {
+                    VectorXi aaa(abel_.n + 2);
+                    aaa(0) = abel_.coef(0);
+                    aaa(1) = abel_.coef(1); // a_\ell = -abel_.coef(1)
+                    for (int k = 1; k <= abel_.n; k++) {
+                        aaa(k + 1) = - k * abel_.coef(k + 2);
+                    }
+                    // TODO: check that we get good accuracy here
+                    MatrixXi log_poly_int = cheb.log_poly_integral_trig(x, gamma_, N_, aaa, abel_.n);
+                    for (int k = 0; k < N_; k++) {
+                        I(k) -= log_poly_int(k, 0) + interval_t(-1, 1) * bmp::upper(log_poly_int(k, 1));
+                    }
+                }
+
+                {   // integral error
+                    interval_t E = - x * log1p(
+                            - abel_.C0 * pow(t - 1, - abel_.n) / abel_.am1_minus_C1
+                            );
+                    verify(E > 0);
+                    for (int k = 0; k < N_; k++) {
+                        I(k) += interval_t(-1, 1) * bmp::upper(E);
+                    }
+                }
+
+                I *= Ax(1);
+
+                r += I;
+
+                // boundary term
+                r += K * phi(x) / 2;
+
+                // derivatives
+                const VectorXci &s = derivatives_s_, &c = derivatives_c_;
+
+                VectorXi der = VectorXi::Zero(N_);
+                for (int m = 1; m <= abel_.halfM; m++) {
+                    Vector2ci aws = abel_inv(Ax(0) + s(m-1));
+                    complex_interval_t kappa_inverse_ratio = Ax(1) * aws(1);
+                    der += (
+                            c(m-1)
+                            * (- log(kappa_inverse_ratio) + complex_interval_t(K)) * kappa_inverse_ratio
+                            * phi(aws(0))
+                           ).real();
+                }
+                der /= -abel_.halfM;
+                r += der;
+
+                // EM error
+                VectorXi EE(N_);
+                {
+                    const interval_t
+                        &vk1 = abel_.varkappa1,
+                        &nu  = abel_.nu,
+                        &am1 = abel_.coef(0),
+                        &C1  = abel_.C1;
+
+                    interval_t C = nu * vk1 / (am1 - C1);
+
+                    verify(bmp::lower(t) > bmp::upper(C));
+
+                    interval_t Theta = asin(C1 / am1) + (1 + gamma_inv_) * pi_ / 2,
+                               M = (am1 + C1) / (am1 - C1) * pow(t / (t - C), 1 + gamma_inv_);
+
+                    interval_t F = M * (K + sqrt(pow(log(M), 2) + pow(Theta, 2)));
+                    F = bmp::upper(F);
+                    EE = F * cheb_sum_small_const_error_;
+                }
+
+                r += EE;
+
+                return r;
+            };
+
+            interval_t xk = x;
+            interval_t inv_Jk = 1;
+
+            // add branches naively up to Nstar
+            while (bmp::upper(xk) > abel_.x_Nstar) {
+                r -= log(inv_Jk) * inv_Jk * phi(xk);
+                Vector2i y = left_inv(xk);
+                xk = y(0);
+                inv_Jk *= y(1);
+            }
+
+            // add the rest when xk is small using Euler-Maclaurin
+            r += S_small(xk, -log(inv_Jk)) * inv_Jk;
             return r;
         }
 
@@ -1043,7 +1161,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
 
         // G(z) evaluated at z = r^{-1}
         i_t G_z = abs(abel.coef(0)) / z * (pow(1 - bz, -gamma_) - 1)
-                - abs(abel.coef(1)) * gamma_ * log(1 - bz);
+                - abs(abel.coef(1)) * gamma_ * log1p(-bz);
         for (int k = 1; k <= n; k++)
             G_z += abs(abel.coef(2 + k)) * pow(z, k)
                 * (pow(1 - bz, -k * gamma_) - 1);
@@ -1057,7 +1175,8 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
 
             // (-1)^{j-1}
             i_t sign = (j % 2 == 0) ? -1 : 1;
-            r += coef(1) * gamma * sign * pow(b, j) / j;
+            // a_ell = -coef(1)
+            r -= coef(1) * gamma * sign * pow(b, j) / j;
 
             int max_k = std::min(n, j - 1);
             for (int k = 1; k <= max_k; k++) {

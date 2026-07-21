@@ -6,7 +6,7 @@
 
 #include "lsv.h"
 
-const int PREC = 192;
+const int PREC = 32;
 
 #include "lsv-common.cpp"
 

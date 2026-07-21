@@ -71,7 +71,9 @@ class Cheb {
             Ni_ = real_t(1) / real_t(N_);
         };
     public:
-        Cheb() {};
+        Cheb() {
+            set_abN(0, 1, 1);
+        }
         Cheb(const std::function<real_t (real_t)> &f, const real_t &a, const real_t &b, int N) {
             set_abN(a, b, N);
 
@@ -81,18 +83,18 @@ class Cheb {
                 f_val(k) = f(cos(pi_ * (k + half_) * Ni_) * bma2_ + bpa2_);
 
             set_from_values(f_val);
-        };
+        }
         Cheb(const VectorXr &coef, const real_t &a, const real_t &b) {
             set_abN(a, b, int(coef.size()));
             coef_ = coef;
-        };
+        }
         Cheb(const real_t &a, const real_t &b, int N) {
             set_abN(a, b, N);
-        };
+        }
 
         VectorXr coef() const {
             return coef_.size() == 0 ? VectorXr::Zero(N_) : coef_;
-        };
+        }
         real_t coef(int n) const {
             return (n >= 0 && n < coef_.size()) ? coef_(n) : real_t(0);
         }
@@ -160,7 +162,7 @@ class Cheb {
         var_t value_trig(const var_t &x) const {
             int N = coef_.size();
             if (N == 0) {
-                return 0;
+                return var_t(0);
             } else {
                 return coef_.dot(basis_values_trig(x, N));
             }
@@ -280,10 +282,10 @@ class Cheb {
             }
 
             for (int j = 2; j < N; j++) {
-                I0(j) = ( (j - 3) * I0(j - 2) 
+                I0(j) = ( (j - 3) * I0(j - 2)
                         - bv(j - 1) * 2 * (1 - y) * yp1 ) / (j + 1);
 
-                L(j)  = ( (j - 3) * L(j - 2) - I0(j) + 2 * I0(j - 1) - I0(j - 2) 
+                L(j)  = ( (j - 3) * L(j - 2) - I0(j) + 2 * I0(j - 1) - I0(j - 2)
                         - bv(j - 1) * 2 * (1 - y) * yp1 * log_yp1 ) / (j + 1);
             }
 
