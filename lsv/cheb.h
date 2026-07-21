@@ -5,11 +5,14 @@
 #include <type_traits>
 #include <unsupported/Eigen/FFT>
 #include <functional>
+#include <algorithm>
 
 #include "verify.h"
 
 namespace cheb_ns {
 
+using std::abs;
+using std::min;
 using std::atan;
 using std::cos;
 using std::acos;
@@ -34,9 +37,13 @@ class Cheb {
 
         template <typename var_t>
             using VectorX = Eigen::Matrix<var_t,Eigen::Dynamic,1>;
+        template <typename var_t>
+            using MatrixX = Eigen::Matrix<var_t,Eigen::Dynamic,Eigen::Dynamic>;
 
         using VectorXr = VectorX<real_t>;
         using VectorXc = VectorX<complex_t>;
+
+        using MatrixXr = MatrixX<real_t>;
 
 
     private:
@@ -256,24 +263,22 @@ class Cheb {
             using std::log;
             verify(N > 0);
             verify(x > a_);
-            const real_t y = (2 * x - bpa_) * bmai_, yp1 = 2 * (x - a_) * bmai_,
+
+            const real_t y = (2 * x - bpa_) * bmai_, yp1 = y + 1,
                   log_yp1 = log(yp1);
             const VectorXr bv = basis_values_trig(x, N);
 
             VectorXr I0(N);
             VectorXr L(N);
 
-            // Base cases for j = 0
             I0(0) = yp1;
             L(0) = yp1 * log_yp1 - yp1;
 
-            // Base cases for j = 1
             if (N > 1) {
                 I0(1) = yp1 * yp1 / 2 - I0(0);
                 L(1) = (yp1 * yp1 / 2) * log_yp1 - yp1 * yp1 / 4 - L(0);
             }
 
-            // Coupled recurrence relation for higher orders
             for (int j = 2; j < N; j++) {
                 I0(j) = ( (j - 3) * I0(j - 2) 
                         - bv(j - 1) * 2 * (1 - y) * yp1 ) / (j + 1);
@@ -285,13 +290,80 @@ class Cheb {
             VectorXr J(N);
             const real_t log_bma2 = log(bma2_);
 
-            // Assemble the final integral
             for (int j = 0; j < N; j++) {
                 J(j) = bma2_ * log_bma2 * I0(j) + bma2_ * L(j);
             }
 
             J(0) /= 2;
             return J;
+        }
+
+        // For x \in (a,b], \beta > 0 and coefficients a_0, ..., a_n with
+        // a_0 > 0 and |a_1| (x - a)^\beta + ... + |a_n| (x - a)^{\beta n} < a_0, compute
+        //      \int_a^x \log(a_0 + a_1 (t - a)^\beta + ... + a_n (t - a)^{n \beta}) basis_values(t) dt
+        // Return an N by 2 matrix with the first for the values of the integral and
+        // the second column for an upper error bound.
+        // The computation works by approximating \log(a_0 + ... ) with m > 0 by
+        //      \log(a_0) + c_1 (t - a)^\beta + ... + c_m (t - a)^{m \beta}
+        // By default, m = n.
+        MatrixXr log_poly_integral_trig(const real_t &x, const real_t &beta,
+                int N, const VectorXr &a) const {
+            return log_poly_integral_trig(x, beta, N, a, a.size());
+        }
+        MatrixXr log_poly_integral_trig(const real_t &x, const real_t &beta,
+                int N, const VectorXr &a, int m) const {
+            using std::log;
+            verify(N > 0);
+            verify(x > a_);
+            const real_t xx = pow(x - a_, beta);
+
+            MatrixXr r = MatrixXr::Zero(N, 2);
+
+            const int n = a.size() - 1;
+            verify(n >= 0);
+
+            // normalize to a_0 = 1
+            VectorXr aa(n + 1);
+            aa(0) = 1;
+            real_t lS = 0; // 1 - |aa_1| xx - ... - |aa_n| xx^n
+            for (int k = n; k > 0; k--) {
+                aa(k) = a(k) / a(0);
+                lS = (lS + abs(aa(k))) * xx;
+            }
+            lS = 1 - lS;
+            verify(a(0) > 0 && lS > 0);
+
+            verify(m > 0);
+
+            // get the coefficients of log(a_0 + ...) and the majorant
+            VectorXr c(m), tc(m);
+            for (int k = 1; k <= m; k++) {
+                c(k - 1) = tc(k - 1) = 0;
+                for (int j = 1; j < min(k, n + 1); j++) {
+                    c(k - 1)  += (k - j) *  c(k - j - 1) *     aa(j);
+                    tc(k - 1) += (k - j) * tc(k - j - 1) * abs(aa(j));
+                }
+                real_t aak = (k <= n) ? aa(k) : 0;
+                c(k - 1)  =     aak  - c(k - 1) / k;
+                tc(k - 1) = abs(aak) + tc(k - 1) / k;
+            }
+
+            // assemble the integral
+            // TODO: the computation of beta_integral can be sped up
+            r.col(0) = log(a(0)) * beta_integral_trig(0, x, N);
+            for (int k = 1; k <= m; k++) {
+                r.col(0) += c(k - 1) * beta_integral_trig(beta * k, x, N);
+            }
+
+            // bound error
+            real_t Em = 0;
+            for (int k = m; k > 0; k--) {
+                Em = (Em + tc(k - 1)) * xx;
+            }
+            Em =  - log(lS) - Em;
+            r.col(1).setConstant(Em * (x - a_));
+
+            return r;
         }
 
         // An upper bound on the sup norm in a Bernstein ellipse with parameter rho,
