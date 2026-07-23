@@ -63,8 +63,12 @@ int main() {
         << lsv.oracle("alpha") << "\n"
         << lsv.oracle("gamma") << "\n";
 
-    // experiment
-    lsv.experimental();
+    lsv.compute_tau();
+    std::cout << lsv.oracle("tau") << "\n";
+
+    lsv.compute_lambda();
+    std::cout << lsv.oracle("lambda") << "\n";
+
 
     return 0;
 }

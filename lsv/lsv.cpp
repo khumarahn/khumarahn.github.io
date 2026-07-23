@@ -24,6 +24,8 @@ EMSCRIPTEN_BINDINGS(my_module) {
         .function("compute_F", &LSV::compute_F)
         .function("compute_derivative_signs_right", &LSV::compute_derivative_signs_right)
         .function("compute_derivative_bounds", &LSV::compute_derivative_bounds)
+        .function("compute_tau", &LSV::compute_tau)
+        .function("compute_lambda", &LSV::compute_lambda)
         .function("oracle", &LSV::oracle)
         .function("double_gamma", &LSV::double_gamma)
         .function("double_alpha", &LSV::double_alpha);

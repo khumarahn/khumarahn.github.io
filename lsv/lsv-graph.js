@@ -106,6 +106,30 @@ worker.onmessage = function(e) {
             .replaceAll('::hp::', m.min_hp_h_prime)
             .replaceAll('::hpp::', m.max_hpp_h_prime);
 
+        if (parseFloat(m.gamma_plus) < 1) {
+            let extra = String.raw`
+            <div style="margin-top: 1em;">
+            Average of the first return time \(\tau (x) = \inf \{k \geq 1 : T^k(x) \in [1/2,1]\) is:
+            \[
+                \frac{\int_{1/2}^1 \tau(x) h(x) \, dx}{\int_{1/2}^1 h(x) \, dx}
+                \in [::tau_minus::, ::tau_plus::]
+                ,
+            \]
+            and the Lyapunov exponent is:
+            \[
+                \frac{\int_0^1 \log (T'(x)) h(x) \, dx}{\int_0^1 h(x) \, dx}
+                \in [::lambda_minus::, ::lambda_plus::]
+                .
+            \]
+            </div>
+            `;
+            extra = extra.replaceAll('::tau_minus::', m.tau_minus)
+                         .replaceAll('::tau_plus::', m.tau_plus)
+                         .replaceAll('::lambda_minus::', m.lambda_minus)
+                         .replaceAll('::lambda_plus::', m.lambda_plus);
+            thm += extra;
+        }
+
         document.getElementById("theorem-text").innerHTML += thm;
 
         document.getElementById('theorem-control').innerHTML = '';

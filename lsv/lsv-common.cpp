@@ -30,6 +30,9 @@ class LSV : public BaseLSV {
                    F1_minus_, F2_minus_, F3_minus_,
                    F1_plus_, F2_plus_, F3_plus_;
 
+        interval_t tau_ = 0,
+                   lambda_ = 0;
+
         // lower bound on (h'/h)' and upper bound on (h''/h)'
         interval_t min_hp_h_prime_,
                    max_hpp_h_prime_;
@@ -143,68 +146,76 @@ class LSV : public BaseLSV {
         }
         // 6
         void compute_derivative_bounds();
-
-        // experimental area
-        void experimental() {
-            std::cout << "\n ** EXPERIMENTAL **\n";
+        // 7
+        void compute_tau() {
+            verify(computation_step_ == 7); computation_step_++;
+            if (bmp::upper(gamma_) >= 1) return;
+            std::cout << "\nJust because... just because I can...\n"
+                << "    I am computing the mean return time....\n\n";
 
             const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
             const VectorXi x_nodes = cheb.nodes();
             VectorXi iota = cheb.beta_integral_trig(0, 1, N_);
 
-            // RETURN TIME
-            interval_t tau;
-            {
-                VectorXi S_values(N_);
+            VectorXi S_values(N_);
 #pragma omp parallel for
-                for (int ix = 0; ix < x_nodes.size(); ix++) {
-                    interval_t x = x_nodes(ix);
-                    S_values(ix) = h_cheb_.coef().dot(tau_sum(x));
-                }
-                interval_t S_half = 2 * tau_sum(HALF)(0),
-                           S_p = 2 * tau_sum(norm_point_A_)(0);
-                interval_cheb_t S_bh(HALF, 1, N_);
-                S_bh.set_from_values(S_values);
-                interval_t I_tau_bh = S_bh.coef().dot(iota) / 2;
-
-                interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
-                           I_err = h_cheb_err_A_ * S_half / 4
-                               + 2 * bh_norm_A * S_p / (pow(rho_A_, N_ - 1) * log(rho_A_));
-
-                tau = I_tau_bh + interval_t(-1, 1) * UPPER(I_err);
+            for (int ix = 0; ix < x_nodes.size(); ix++) {
+                interval_t x = x_nodes(ix);
+                S_values(ix) = h_cheb_.coef().dot(tau_sum(x));
             }
+            interval_t S_half = 2 * tau_sum(HALF)(0),
+                       S_p = 2 * tau_sum(norm_point_A_)(0);
+            interval_cheb_t S_bh(HALF, 1, N_);
+            S_bh.set_from_values(S_values);
+            interval_t I_tau_bh = S_bh.coef().dot(iota) / 2;
 
-            // LYAPUNOV EXPONENT
-            interval_t Lambda;
-            {
-                VectorXi S_values(N_);
+            interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
+                       I_err = h_cheb_err_A_ * S_half / 4
+                           + 2 * bh_norm_A * S_p / (pow(rho_A_, N_ - 1) * log(rho_A_));
+
+            tau_ = I_tau_bh + interval_t(-1, 1) * UPPER(I_err);
+
+            std::cout << "Mean return time: " << real_to_string(bmp::median(tau_), 10)
+                << ", width: " << bmp::width(tau_) << "\n";
+        }
+
+        // 8
+        void compute_lambda() {
+            verify(computation_step_ == 8); computation_step_++;
+            if (bmp::upper(gamma_) >= 1) return;
+            std::cout << "\nTo prove that I have free will, I *WILL* compute\n"
+                << "    the Lyapunov exponent too!!!\n\n";
+
+            const interval_cheb_t cheb(interval_t(1) / 2, 1, N_);
+            const VectorXi x_nodes = cheb.nodes();
+            VectorXi iota = cheb.beta_integral_trig(0, 1, N_);
+
+            VectorXi S_values(N_);
 #pragma omp parallel for
-                for (int ix = 0; ix < x_nodes.size(); ix++) {
-                    interval_t x = x_nodes(ix);
-                    S_values(ix) = h_cheb_.coef().dot(lambda_sum(x));
-                }
-                interval_cheb_t S_bh(HALF, 1, N_);
-                S_bh.set_from_values(S_values);
-                interval_t I_bh = S_bh.coef().dot(iota);
-
-                interval_t R = 2 * lambda_sum(norm_point_A_)(0)
-                    + pi_ * 2 * cheb_sum(norm_point_A_)(0);
-
-                interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
-                           I_err = R * (
-                                   h_cheb_err_A_ / 2
-                                   + 4 * bh_norm_A / (pow(rho_A_, N_ - 1) * log(rho_A_))
-                                   );
-
-                Lambda = I_bh + interval_t(-1, 1) * UPPER(I_err);
+            for (int ix = 0; ix < x_nodes.size(); ix++) {
+                interval_t x = x_nodes(ix);
+                S_values(ix) = h_cheb_.coef().dot(lambda_sum(x));
             }
+            interval_cheb_t S_bh(HALF, 1, N_);
+            S_bh.set_from_values(S_values);
+            interval_t I_bh = S_bh.coef().dot(iota);
 
-            interval_t lambda = (Lambda / 2 + log(interval_t(2))) / tau;
-            std::cout << "Mean return time: " << real_to_string(bmp::median(tau), 20)
-                << ", width: " << bmp::width(tau) << "\n"
-                << "Lyapunov exponent: " << real_to_string(bmp::median(lambda), 20)
-                << ", width: " << bmp::width(lambda) << "\n"
-                << "exp of Lyapunov exponent: " << real_to_string(bmp::median(interval_t(exp(lambda))), 20) << "\n";
+            interval_t R = 2 * lambda_sum(norm_point_A_)(0)
+                + pi_ * 2 * cheb_sum(norm_point_A_)(0);
+
+            interval_t bh_norm_A = h_cheb_.ellipse_norm(rho_A_),
+                       I_err = R * (
+                               h_cheb_err_A_ / 2
+                               + 4 * bh_norm_A / (pow(rho_A_, N_ - 1) * log(rho_A_))
+                               );
+
+            interval_t Lambda = I_bh + interval_t(-1, 1) * UPPER(I_err);
+
+            lambda_ = (Lambda / 2 + log(interval_t(2))) / tau_;
+            std::cout << "Lyapunov exponent (LE): " << real_to_string(bmp::median(lambda_), 10)
+                << ", width: " << bmp::width(lambda_) << "\n"
+                << "exp of LE: " << real_to_string(bmp::median(interval_t(exp(lambda_))), 10)
+                << "\n";
         }
 
         double double_gamma() const {
@@ -290,6 +301,24 @@ class LSV : public BaseLSV {
                 } else {
                     return "[" + s1 + ", " + s2 + "]";
                 }
+            } else if (q == "tau" || q == "tau-" || q == "tau+") {
+                auto [s1, s2] = interval_outer_string(tau_, 10);
+                if (q == "tau-") {
+                    return s1;
+                } else if (q == "tau+") {
+                    return s2;
+                } else {
+                    return "[" + s1 + ", " + s2 + "]";
+                }
+            } else if (q == "lambda" || q == "lambda-" || q == "lambda+") {
+                auto [s1, s2] = interval_outer_string(lambda_, 10);
+                if (q == "lambda-") {
+                    return s1;
+                } else if (q == "lambda+") {
+                    return s2;
+                } else {
+                    return "[" + s1 + ", " + s2 + "]";
+                }
             } else {
                 return std::string("oracle what!!!!!11111");
             }
@@ -332,6 +361,13 @@ class LSV : public BaseLSV {
             return {
                 real_to_string(bmp::lower(x), nn, true),
                 real_to_string(bmp::upper(x), nn, false)
+            };
+        }
+        std::pair<std::string, std::string> interval_outer_string(const interval_t &x, int n) {
+            verify(n >= 0);
+            return {
+                real_to_string(bmp::lower(x), n, false),
+                real_to_string(bmp::upper(x), n, true)
             };
         }
 

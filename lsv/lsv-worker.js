@@ -35,6 +35,8 @@ function runOrders() {
             lsv_cpp.compute_F();
             lsv_cpp.compute_derivative_signs_right();
             lsv_cpp.compute_derivative_bounds();
+            lsv_cpp.compute_tau();
+            lsv_cpp.compute_lambda();
 
             postMessage({
                 type:               'bounds',
@@ -45,7 +47,11 @@ function runOrders() {
                 alpha_minus:        lsv_cpp.oracle("alpha-"),
                 alpha_plus:         lsv_cpp.oracle("alpha+"),
                 min_hp_h_prime:     lsv_cpp.oracle("min_hp_h_prime"),
-                max_hpp_h_prime:    lsv_cpp.oracle("max_hpp_h_prime")
+                max_hpp_h_prime:    lsv_cpp.oracle("max_hpp_h_prime"),
+                tau_minus:          lsv_cpp.oracle("tau-"),
+                tau_plus:           lsv_cpp.oracle("tau+"),
+                lambda_minus:       lsv_cpp.oracle("lambda-"),
+                lambda_plus:        lsv_cpp.oracle("lambda+")
             });
         } else {
             console.log('worker: unknown order ', e);
