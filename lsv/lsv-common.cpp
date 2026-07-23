@@ -156,7 +156,7 @@ class LSV : public BaseLSV {
             interval_t tau;
             {
                 VectorXi S_values(N_);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for
                 for (int ix = 0; ix < x_nodes.size(); ix++) {
                     interval_t x = x_nodes(ix);
                     S_values(ix) = h_cheb_.coef().dot(tau_sum(x));
@@ -178,7 +178,7 @@ class LSV : public BaseLSV {
             interval_t Lambda;
             {
                 VectorXi S_values(N_);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for
                 for (int ix = 0; ix < x_nodes.size(); ix++) {
                     interval_t x = x_nodes(ix);
                     S_values(ix) = h_cheb_.coef().dot(lambda_sum(x));

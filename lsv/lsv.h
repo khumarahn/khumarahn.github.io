@@ -177,7 +177,7 @@ class LSV {
 
             const VectorXi B2 = bernoulli2k(abel_.L);    // B2(ell) = B_{2 ell}
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for
             for (int m = 1; m <= abel_.halfM; m++) {
                 interval_t q = 2 * pi_ * (2 * m - 1) / interval_t(2 * abel_.M);
                 complex_interval_t qq (0, q);
@@ -650,7 +650,7 @@ class LSV {
 
             // Compute (L T_n)(x) for n=0,...,N-1 and x in the node points
             MatrixXi L_values(N_, N_);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for
             for (int ix = 0; ix < x_nodes.size(); ix++) {
                 interval_t x = x_nodes(ix);
                 L_values.col(ix) = cheb_sum(x) / interval_t(2);
