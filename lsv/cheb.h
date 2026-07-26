@@ -145,8 +145,8 @@ class Cheb {
             return acos(x);
         }
 
-        // A trigonometric computation of values of basis vectors,
-        // does not work on real line outside [-1,1]
+        // basis values, a trigonometric computation,
+        // does not work on real line outside [a_, b_]
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         VectorX<var_t> basis_values_trig(const var_t &x, int N) const {
             VectorX<var_t> ret(N);
@@ -167,11 +167,10 @@ class Cheb {
                 return coef_.dot(basis_values_trig(x, N));
             }
         }
-        // optimized computation of value when coef = (0,...,0,1,0,...,0),
-        // with 1 at index n
+        // value when coef = (0,...,0,1,0,...,0), with 1 at index n,
+        // Clenshaw recurrence
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         var_t basis_value(const var_t &x, int n) const {
-            // Clenshaw recurrence
             var_t d((n > 0) ? 1 : 0),
                   dd(0),
                   y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_),
@@ -183,12 +182,38 @@ class Cheb {
             }
             return y * d - dd + ((n == 0) ? half_ : var_t(0));
         }
-        // optimized computation of value at first N basis vectors
+        // values of basis vectors at x when x is close to a
+        template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
+        VectorX<var_t> basis_values_a(const var_t &x, int N) const {
+            verify(N > 0);
+            VectorX<var_t> ret(N);
+            ret(0) = half_;
+
+            const var_t y = (x - a_) * bma2i_,
+                  y2 = var_t(2) * y,
+                  y2m1 = var_t(1) - y2;
+            // P_k = (-1)^n T_k
+            // P_{n+1}(-1+y) = - 2 (-1+y) P_n(-1+y) - P_{n-1}(-1+y)
+            // D_n = P_n - P_{n-1}
+            // so:
+            // D_{n+1}(-1+y) = - 2 y P_n(-1+y) + D_n(-1+y)
+            // P_{n+1}(-1+y) = P_n(-1+y) + D_{n+1}
+
+            var_t Pn = var_t(1) - y,
+                  Dn = - y;
+            for (int j = 1; j < N; j++) {
+                ret(j) = (j % 2) ? -Pn : Pn;
+                var_t P = Pn * y2m1 + Dn;
+                Dn -= y2 * Pn;
+                Pn = P;
+            }
+            return ret;
+        }
+        // values of basis vectors, Clenshaw recurrence
         template <typename var_t> requires type_one_of<var_t, real_t, complex_t>
         VectorX<var_t> basis_values(const var_t &x, int N) const {
             VectorX<var_t> ret = VectorX<var_t>::Zero(N);
             ret(0) = half_;
-            // Clenshaw recurrence
             var_t d(1), dd(0),
                   y = (var_t(2) * x - var_t(bpa_)) * var_t(bmai_);
             for (int j = 1; j < N; j++) {
@@ -235,13 +260,20 @@ class Cheb {
         // For x \in [a,b] and \beta > -1, compute
         //     \int_a^x (t - a)^\beta basis_values(t) dt
         VectorXr beta_integral_trig(const real_t &beta, const real_t &x, int N) const {
-            verify(beta > real_t(-1));
+            return beta_integral_bv(beta, x, basis_values_trig(x, N));
+        }
+        VectorXr beta_integral_a(const real_t &beta, const real_t &x, int N) const {
+            return beta_integral_bv(beta, x, basis_values_a(x, N));
+        }
+        VectorXr beta_integral_bv(const real_t &beta, const real_t &x,
+                const VectorXr &bv) const {
+            int N = bv.size();
             verify(N > 0);
+            verify(beta > real_t(-1));
 
             const real_t y = (2 * x - bpa_) * bmai_,
                   yp1 = 2 * (x - a_) * bmai_,
                   y1b1 = pow(yp1, beta + 1);
-            const VectorXr bv = basis_values_trig(x, N);
 
             VectorXr I(N);
             I(0) = y1b1 / (beta + 1);
@@ -262,13 +294,20 @@ class Cheb {
         // For x \in (a,b], compute
         //     \int_a^x log(t - a) basis_values(t) dt
         VectorXr log_integral_trig(const real_t &x, int N) const {
+            return log_integral_bv(x, basis_values_trig(x, N));
+        }
+        VectorXr log_integral_a(const real_t &x, int N) const {
+            return log_integral_bv(x, basis_values_a(x, N));
+        }
+        VectorXr log_integral_bv(const real_t &x, const VectorXr &bv) const {
             using std::log;
+            int N = bv.size();
             verify(N > 0);
             verify(x > a_);
 
-            const real_t y = (2 * x - bpa_) * bmai_, yp1 = y + 1,
+            const real_t y = (2 * x - bpa_) * bmai_,
+                  yp1 = y + 1,
                   log_yp1 = log(yp1);
-            const VectorXr bv = basis_values_trig(x, N);
 
             VectorXr I0(N);
             VectorXr L(N);
@@ -308,11 +347,11 @@ class Cheb {
         // The computation works by approximating \log(a_0 + ... ) with m > 0 by
         //      \log(a_0) + c_1 (t - a)^\beta + ... + c_m (t - a)^{m \beta}
         // By default, m = n.
-        MatrixXr log_poly_integral_trig(const real_t &x, const real_t &beta,
+        MatrixXr log_poly_integral_a(const real_t &x, const real_t &beta,
                 int N, const VectorXr &a) const {
-            return log_poly_integral_trig(x, beta, N, a, a.size());
+            return log_poly_integral_a(x, beta, N, a, a.size());
         }
-        MatrixXr log_poly_integral_trig(const real_t &x, const real_t &beta,
+        MatrixXr log_poly_integral_a(const real_t &x, const real_t &beta,
                 int N, const VectorXr &a, int m) const {
             using std::log;
             verify(N > 0);
@@ -352,9 +391,9 @@ class Cheb {
 
             // assemble the integral
             // TODO: the computation of beta_integral can be sped up
-            r.col(0) = log(a(0)) * beta_integral_trig(0, x, N);
+            r.col(0) = log(a(0)) * beta_integral_a(0, x, N);
             for (int k = 1; k <= m; k++) {
-                r.col(0) += c(k - 1) * beta_integral_trig(beta * k, x, N);
+                r.col(0) += c(k - 1) * beta_integral_a(beta * k, x, N);
             }
 
             // bound error

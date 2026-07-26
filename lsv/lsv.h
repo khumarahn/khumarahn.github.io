@@ -364,21 +364,24 @@ class LSV {
                 // in interval arithmetic
                 return cheb.basis_values_trig(x, N_);
             };
+            auto phi_small = [this, &cheb]<typename var_t>(const var_t &x) {
+                return cheb.basis_values_a(x, N_);
+            };
 
             // for a **small** real x, return a rigorous approximation of S(z) = S(x^\gamma)
             // for the vector-valued observable of first N Chebyshev polynomials
-            auto S_small = [this, &cheb, &phi](const interval_t &x) -> VectorXi {
+            auto S_small = [this, &cheb, &phi_small](const interval_t &x) -> VectorXi {
                 //interval_t z = pow(x, gamma_);
                 VectorXi r = VectorXi::Zero(N_);
                 Vector2i Ax = this->abel(x);
 
                 {   // integral
-                    VectorXi bi = cheb.beta_integral_trig(0, x, N_);
+                    VectorXi bi = cheb.beta_integral_a(0, x, N_);
                     r -= Ax(1) * bi;
                 }
 
                 // \varphi(z) / 2
-                r += phi(x) / 2;
+                r += phi_small(x) / 2;
 
                 {   // derivatives
                     const VectorXci &s = derivatives_s_;
@@ -391,7 +394,7 @@ class LSV {
 //    << " Ax(0): " << Ax(0) << ", width: " << bmp::width(Ax(0))
 //    << "\n";
                         Vector2ci xm_inv = abel_inv(Ax(0) + s(m-1));
-                        der += ((c(m-1) * xm_inv(1)) * phi(xm_inv(0))).real();
+                        der += ((c(m-1) * xm_inv(1)) * phi_small(xm_inv(0))).real();
                     }
 
                     der *= - 2 * Ax(1) / abel_.M;
@@ -433,15 +436,18 @@ class LSV {
             auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
                 return cheb.basis_values_trig(x, N_);
             };
+            auto phi_small = [this, &cheb]<typename var_t>(const var_t &x) {
+                return cheb.basis_values_a(x, N_);
+            };
 
             // for a **small** real x, and K \geq 0, approximate \sum_{k \ge 0} \psi(k)
             // where \psi(k) = (k + K) \varphi(x_k) / J_k(x)
-            auto S_small = [this, &cheb, &phi](const interval_t &x, int K) -> VectorXi {
+            auto S_small = [this, &cheb, &phi_small](const interval_t &x, int K) -> VectorXi {
                 VectorXi r = VectorXi::Zero(N_);
                 Vector2i Ax = this->abel(x);
 
                 // \gamma a_\ell \int_0^x \log(u) \varphi(u) du
-                VectorXi Ilog = - gamma_ * abel_.coef(1) * cheb.log_integral_trig(x, N_);
+                VectorXi Ilog = - gamma_ * abel_.coef(1) * cheb.log_integral_a(x, N_);
 
                 // \sum_{j=-1}^{n} a_j \int_0^x u^{\gamma j} \varphi(u) du
                 // + \int_0^x (-A(x) + K) \varphi(u) du
@@ -451,7 +457,7 @@ class LSV {
                     if (j == 0) {
                         c += -Ax(0) + K;
                     }
-                    Ipow += c * cheb.beta_integral_trig(j * gamma_, x, N_);
+                    Ipow += c * cheb.beta_integral_a(j * gamma_, x, N_);
                 }
 
                 // I = - A'(x) \int_0^x (A(u) - A(x) + K) \varphi(u) du
@@ -468,7 +474,7 @@ class LSV {
                 r += I;
 
                 // boundary term
-                r += K * phi(x) / 2;
+                r += K * phi_small(x) / 2;
 
                 // derivatives
                 const VectorXci &s = derivatives_s_, &c = derivatives_c_;
@@ -476,7 +482,7 @@ class LSV {
                 VectorXi der = VectorXi::Zero(N_);
                 for (int m = 1; m <= abel_.halfM; m++) {
                     Vector2ci aws = abel_inv(Ax(0) + s(m-1));
-                    der += ((c(m-1) * aws(1) * (s(m-1) + complex_interval_t(K))) * phi(aws(0))).real();
+                    der += ((c(m-1) * aws(1) * (s(m-1) + complex_interval_t(K))) * phi_small(aws(0))).real();
                 }
                 der *= - Ax(1) / abel_.halfM;
                 r += der;
@@ -536,10 +542,13 @@ class LSV {
             auto phi = [this, &cheb]<typename var_t>(const var_t &x) {
                 return cheb.basis_values_trig(x, N_);
             };
+            auto phi_small = [this, &cheb]<typename var_t>(const var_t &x) {
+                return cheb.basis_values_a(x, N_);
+            };
 
             // for a **small** real x, and K \geq 0, approximate \sum_{k \ge 0} \psi(k)
             // where \psi(k) = \varphi(x_k) (K + \log J_k(x)) / J_k(x)
-            auto S_small = [this, &cheb, &phi](const interval_t &x, interval_t K) -> VectorXi {
+            auto S_small = [this, &cheb, &phi_small](const interval_t &x, interval_t K) -> VectorXi {
                 interval_t t = pow(x, -gamma_);
                 VectorXi r = VectorXi::Zero(N_);
                 Vector2i Ax = this->abel(x);
@@ -548,8 +557,8 @@ class LSV {
                 VectorXi I = VectorXi::Zero(N_);
 
                 // two simpler, exact integrals
-                I += (log(- Ax(1) / gamma_) - K) * cheb.beta_integral_trig(0, x, N_);
-                I += (gamma_ + 1) * cheb.log_integral_trig(x, N_);
+                I += (log(- Ax(1) / gamma_) - K) * cheb.beta_integral_a(0, x, N_);
+                I += (gamma_ + 1) * cheb.log_integral_a(x, N_);
 
                 // log poly integral
                 {
@@ -560,7 +569,7 @@ class LSV {
                         aaa(k + 1) = - k * abel_.coef(k + 2);
                     }
                     // TODO: check that we get good accuracy here
-                    MatrixXi log_poly_int = cheb.log_poly_integral_trig(x, gamma_, N_, aaa, abel_.n);
+                    MatrixXi log_poly_int = cheb.log_poly_integral_a(x, gamma_, N_, aaa, abel_.n);
                     for (int k = 0; k < N_; k++) {
                         I(k) -= log_poly_int(k, 0) + interval_t(-1, 1) * bmp::upper(log_poly_int(k, 1));
                     }
@@ -581,7 +590,7 @@ class LSV {
                 r += I;
 
                 // boundary term
-                r += K * phi(x) / 2;
+                r += K * phi_small(x) / 2;
 
                 // derivatives
                 const VectorXci &s = derivatives_s_, &c = derivatives_c_;
@@ -593,7 +602,7 @@ class LSV {
                     der += (
                             c(m-1)
                             * (- log(kappa_inverse_ratio) + complex_interval_t(K)) * kappa_inverse_ratio
-                            * phi(aws(0))
+                            * phi_small(aws(0))
                            ).real();
                 }
                 der /= -abel_.halfM;
