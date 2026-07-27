@@ -105,6 +105,9 @@ class LSV {
             interval_t r1, C1, am1_minus_C1;
             // |z^3 \hA''(z) - 2 a_{-1}| \leq C2
             interval_t C2;
+            // a complex interval containing the derivative of \tA^{-1}
+            // on \tA(\tP_1)
+            complex_interval_t tA_inv_prime_c;
 
             // CONSTANTS FOR Euler-Maclaurin
             // nu, a parameter for radius of circles
@@ -276,6 +279,7 @@ class LSV {
                 << "    .r1: " << abel_.r1
                 << ", .C1: " << abel_.C1
                 << ", .C2: " << abel_.C2 << "\n"
+                << "    .tA_inv_prime_c: " << abel_.tA_inv_prime_c << "\n"
                 << "    .varkappa0: " << abel_.varkappa0
                 << ", .varkappa1: " << abel_.varkappa1 << "\n"
                 << "    .am1_minus_C1: " << abel_.am1_minus_C1
@@ -942,21 +946,22 @@ class LSV {
             return interval_root_ns::interval_newton(f, guess);
         }
         // * complex interval version in t
-        Vector2ci abel_t_inv(const complex_interval_t &a) const {
+        Vector2ci abel_t_inv(const complex_interval_t &w) const {
             auto m = [] (complex_interval_t x) {
                 using bmp::median;
                 return complex_t(median(x.real()), median(x.imag()));
             };
-            Vector2c g = abel_t_inv<complex_t>(m(a));
-            complex_interval_t g0 = g(0),
-                               g1 = g(1);
-            // FIXME: look at the constants 16 and 0.0001
-            complex_interval_t guess = g0 + interval_t(16) * g1 * (
-                    bmp::width(a.real()) + bmp::width(a.imag()) + interval_t(0.001)) *
-                complex_interval_t(interval_t(-1,1), interval_t(-1,1));
-            auto f = [this, &a] (const complex_interval_t &t) {
+            complex_interval_t t0 = abel_t_inv<complex_t>(m(w))(0),
+                               w0 = abel_t(t0)(0);
+            // Mean Value Theorem is, with some q,
+            // \tA^{-1}(w) \subset t_0 + (w - w0) (\tA^{-1})'(q)
+            // if rhs is in \tP_1
+            complex_interval_t guess = t0 + (w - w0) * abel_.tA_inv_prime_c;
+            verify(LOWER(guess.real()) >= abel_.r1);
+            //return Vector2ci{guess, interval_t(1) / abel_t(guess)(1)};
+            auto f = [this, &w] (const complex_interval_t &t) {
                 Vector2ci r = abel_t(t);
-                r(0) -= a;
+                r(0) -= w;
                 return r;
             };
             return interval_root_ns::complex_krawczyk(f, guess);
@@ -1283,6 +1288,15 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
                     am1 - abel.C1
                     ));
     }
+    {   // tA_inv_prime_c
+        interval_t aC = pow(abel.coef(0), 2) - pow(abel.C1, 2),
+                   ap = abel.coef(0) / aC,
+                   Cp = abel.C1 / aC;
+        abel.tA_inv_prime_c = complex_interval_t(
+                interval_t(LOWER(ap - Cp), UPPER(ap + Cp)),
+                interval_t(LOWER(-Cp), UPPER(Cp))
+                );
+    }
 
     {   // C2
         abel.C2 = 2 * abel.C1 + abs(abel.coef(1)) / abel.r1;
@@ -1390,6 +1404,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     verify( abel.r1 > abel.r_good );
     verify( abel.C1 > 0 );
     verify( abel.C2 > 0 );
+    verify( abs(abel.tA_inv_prime_c) > 0 );
     verify( abel.varkappa0 > abel.varkappa1 && abel.varkappa1 > 0 );
     verify( abel.am1_minus_C1 > 0 );
     if (!rough) {
