@@ -52,7 +52,7 @@ class LSV {
         // PREC is binary target precision;
         // DIGITS is decimal working precision,
         // we need it quite a bit higher than the target precision
-        static constexpr int DIGITS = max(56, PREC / 2); // FIXME
+        static constexpr int DIGITS = max(56, (11 * PREC) / 32); // FIXME
         using real_t     = bmp::number<bmp::mpfr_float_backend<DIGITS>>;
         using interval_t = bmp::number<bmp::mpfi_float_backend<DIGITS>>;
 
@@ -226,15 +226,16 @@ class LSV {
                         ))));
 
             {   // NEED_DIGITS_ (approximately)
+                NEED_DIGITS_ = 1 + PREC / 3;
                 // when computing the norm of the transfer operator matrix, we want for j < N:
                 //   min(\rho_{C_+}^{-j} \rho_C^j, 10^{-DIGITS} \rho_C^j) < 0.001
                 interval_t J = bmp::upper(interval_t(
                             13 / log (rho_C_plus_ / rho_C_)
                             ));
                 if (J > N_) J = N_;
-                NEED_DIGITS_ = int(ceil(bmp::upper(interval_t(
+                NEED_DIGITS_ = max(NEED_DIGITS_, int(ceil(bmp::upper(interval_t(
                             (13 + J * log(rho_C_)) / log(real_t(10))
-                            ))));
+                            )))));
             }
             if(DIGITS < NEED_DIGITS_) {
                 std::cout << "Need more DIGITS: " << NEED_DIGITS_ << "\n";

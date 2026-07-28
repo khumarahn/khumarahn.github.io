@@ -85,7 +85,7 @@ worker.onmessage = function(e) {
 
         let thm = String.raw`
         <div>
-        For
+        For all
         \begin{align*}
             \alpha \in [
             & ::alpha_minus:: , \\

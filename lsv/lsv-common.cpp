@@ -302,7 +302,8 @@ class LSV : public BaseLSV {
                     return "[" + s1 + ", " + s2 + "]";
                 }
             } else if (q == "tau" || q == "tau-" || q == "tau+") {
-                auto [s1, s2] = interval_outer_string(tau_, 10);
+                int dec = 4 + std::max(0, int(-log10(bmp::width(tau_))));
+                auto [s1, s2] = interval_outer_string(tau_, dec);
                 if (q == "tau-") {
                     return s1;
                 } else if (q == "tau+") {
@@ -311,7 +312,8 @@ class LSV : public BaseLSV {
                     return "[" + s1 + ", " + s2 + "]";
                 }
             } else if (q == "lambda" || q == "lambda-" || q == "lambda+") {
-                auto [s1, s2] = interval_outer_string(lambda_, 10);
+                int dec = 4 + std::max(0, int(-log10(bmp::width(lambda_))));
+                auto [s1, s2] = interval_outer_string(lambda_, dec);
                 if (q == "lambda-") {
                     return s1;
                 } else if (q == "lambda+") {
