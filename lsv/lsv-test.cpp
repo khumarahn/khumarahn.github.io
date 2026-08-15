@@ -69,6 +69,5 @@ int main() {
     lsv.compute_lambda();
     std::cout << lsv.oracle("lambda") << "\n";
 
-
     return 0;
 }

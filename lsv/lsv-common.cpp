@@ -13,7 +13,7 @@ class LSV : public BaseLSV {
         MatrixXi L_;
         h_meta_t h_meta_;
         // h and derivatives on [1/2,1]
-        interval_cheb_t h_cheb_, hp1_cheb_, hp2_cheb_, hp3_cheb_;
+        interval_cheb_t h_cheb_, hp1_cheb_, hp2_cheb_, hp3_cheb_, hp4_cheb_;
 
         interval_t
             h_cheb_err_A_,   // error of the approximation of h in A
@@ -21,7 +21,7 @@ class LSV : public BaseLSV {
             h_sup_A_;        // sup norm of h on A
 
         // errors in approximation of the derivatives on [1/2,1]
-        interval_t hp1_cheb_err_, hp2_cheb_err_, hp3_cheb_err_;
+        interval_t hp1_cheb_err_, hp2_cheb_err_, hp3_cheb_err_, hp4_cheb_err_;
         // and sup norms of derivatives on [1/2,1]
         //interval_t hp1_sup_, hp2_sup_, hp3_sup_;
 
@@ -114,10 +114,12 @@ class LSV : public BaseLSV {
             hp1_cheb_ = h_cheb_.derivative();
             hp2_cheb_ = hp1_cheb_.derivative();
             hp3_cheb_ = hp2_cheb_.derivative();
+            hp4_cheb_ = hp3_cheb_.derivative();
 
-            hp1_cheb_err_ = UPPER(1 * h_cheb_err_A_ / pow(dist_half_A_, 1));
-            hp2_cheb_err_ = UPPER(2 * h_cheb_err_A_ / pow(dist_half_A_, 2));
-            hp3_cheb_err_ = UPPER(6 * h_cheb_err_A_ / pow(dist_half_A_, 3));
+            hp1_cheb_err_ = UPPER( 1 * h_cheb_err_A_ / pow(dist_half_A_, 1));
+            hp2_cheb_err_ = UPPER( 2 * h_cheb_err_A_ / pow(dist_half_A_, 2));
+            hp3_cheb_err_ = UPPER( 6 * h_cheb_err_A_ / pow(dist_half_A_, 3));
+            hp4_cheb_err_ = UPPER(24 * h_cheb_err_A_ / pow(dist_half_A_, 4));
 
             h_sup_A_ = UPPER(h_cheb_.ellipse_norm(rho_A_) + h_cheb_err_A_);
 
@@ -131,17 +133,20 @@ class LSV : public BaseLSV {
         void compute_derivative_signs_right() {
             verify(computation_step_ == 5); computation_step_++;
             std::cout << "For x in [1/2, 1] I feel I should know more. Let's see:\n\n";
-            std::cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0 on [1/2,1].\n"
+            std::cout << "Lemma. h'(x) < 0, h''(x) > 0, h'''(x) < 0, h''''(x) > 0 on [1/2,1].\n"
                 << "Proving...\n";
             interval_t hp1_max = UPPER(cheb_range(hp1_cheb_) + hp1_cheb_err_),
                        hp2_min = LOWER(cheb_range(hp2_cheb_) - hp2_cheb_err_),
-                       hp3_max = UPPER(cheb_range(hp3_cheb_) + hp3_cheb_err_);
-            verify(hp1_max < 0 && hp2_min > 0 && hp3_max < 0);
+                       hp3_max = UPPER(cheb_range(hp3_cheb_) + hp3_cheb_err_),
+                       hp4_min = LOWER(cheb_range(hp4_cheb_) - hp4_cheb_err_);
+            verify(hp1_max < 0 && hp2_min > 0 && hp3_max < 0 && hp4_min > 0);
             std::cout << "  ... done. h'(x) <= " << hp1_max << ", h''(x) >= " << hp2_min
-                << ", h'''(x) <= " << hp3_max << " ∎\n"
+                << ",\nh'''(x) <= " << hp3_max
+                << ", h''''(x) >= " << hp4_min << " ∎\n"
                 << "\nSanity check: h'(1) is " << Hp1(1)
                 << ", h''(1) is " << Hp2(1)
-                << ", h'''(1) is " << Hp3(1)
+                << ",\nh'''(1) is " << Hp3(1)
+                << ", h''''(1) is " << Hp4(1)
                 << "\n\n";
         }
         // 6
@@ -273,6 +278,10 @@ class LSV : public BaseLSV {
             verify(LOWER(x) >= HALF && UPPER(x) <= 1);
             return hp3_cheb_.value_trig(x) + interval_t(-1,1) * hp3_cheb_err_;
         }
+        interval_t Hp4 (const interval_t &x) {
+            verify(LOWER(x) >= HALF && UPPER(x) <= 1);
+            return hp4_cheb_.value_trig(x) + interval_t(-1,1) * hp4_cheb_err_;
+        }
 
         std::string oracle(std::string q) {
             if (q == "min_hp_h_prime") {
@@ -302,24 +311,32 @@ class LSV : public BaseLSV {
                     return "[" + s1 + ", " + s2 + "]";
                 }
             } else if (q == "tau" || q == "tau-" || q == "tau+") {
-                int dec = 4 + std::max(0, int(-log10(bmp::width(tau_))));
-                auto [s1, s2] = interval_outer_string(tau_, dec);
-                if (q == "tau-") {
-                    return s1;
-                } else if (q == "tau+") {
-                    return s2;
+                if (bmp::upper(gamma_) < 1 && bmp::width(tau_) > 0) {
+                    int dec = 4 + std::max(0, int(-log10(bmp::width(tau_))));
+                    auto [s1, s2] = interval_outer_string(tau_, dec);
+                    if (q == "tau-") {
+                        return s1;
+                    } else if (q == "tau+") {
+                        return s2;
+                    } else {
+                        return "[" + s1 + ", " + s2 + "]";
+                    }
                 } else {
-                    return "[" + s1 + ", " + s2 + "]";
+                    return "NA";
                 }
             } else if (q == "lambda" || q == "lambda-" || q == "lambda+") {
-                int dec = 4 + std::max(0, int(-log10(bmp::width(lambda_))));
-                auto [s1, s2] = interval_outer_string(lambda_, dec);
-                if (q == "lambda-") {
-                    return s1;
-                } else if (q == "lambda+") {
-                    return s2;
+                if (bmp::upper(gamma_) < 1 && bmp::width(lambda_) > 0) {
+                    int dec = 4 + std::max(0, int(-log10(bmp::width(lambda_))));
+                    auto [s1, s2] = interval_outer_string(lambda_, dec);
+                    if (q == "lambda-") {
+                        return s1;
+                    } else if (q == "lambda+") {
+                        return s2;
+                    } else {
+                        return "[" + s1 + ", " + s2 + "]";
+                    }
                 } else {
-                    return "[" + s1 + ", " + s2 + "]";
+                    return "NA";
                 }
             } else {
                 return std::string("oracle what!!!!!11111");
@@ -767,7 +784,7 @@ LSV::interval_t LSV::second_derivative_range(
 
 LSV::interval_t LSV::cheb_range(const LSV::interval_cheb_t &p) {
     interval_cheb_t dp = p.derivative();
-    interval_t d_sup = dp.ellipse_norm(1);
+    interval_t dp_sup = UPPER(dp.ellipse_norm(1));
 
     VectorXi nodes = p.nodes();
     int N = nodes.size();
@@ -791,7 +808,13 @@ LSV::interval_t LSV::cheb_range(const LSV::interval_cheb_t &p) {
     interval_t max_v = UPPER(Y(0));
 
     for(int i = 0; i < N + 1; i++) {
-        interval_t range = function_range(X(i), X(i+1), Y(i), Y(i+1), d_sup);
+        interval_t XI(LOWER(X(i)), UPPER(X(i+1))),
+                   dp_XI = dp.value_trig(XI),
+                   dp_sup_XI = UPPER(abs(dp_XI));
+
+        interval_t range = function_range(X(i), X(i+1), Y(i), Y(i+1),
+                min(dp_sup, dp_sup_XI));
+
         min_v = min(min_v, LOWER(range));
         max_v = max(max_v, UPPER(range));
     }

@@ -1078,12 +1078,10 @@ void LSV<PREC>::compute_ellipses() {
     auto norm_point = [g = gamma_, g_inv = gamma_inv_, pi = pi_]
         (const interval_t& rho) -> interval_t {
             interval_t a = (rho + 1 / rho) / 8,
-                       b = (rho - 1 / rho) / 8,
-                       q = 1 / ((g + 1) * pow(2, g)),
-                       q2 = q * q;
+                       b = (rho - 1 / rho) / 8;
 
-            int steps = 512;
-            interval_t dt = pi / (2 * steps);
+            int steps = 1024;
+            interval_t dt = pi / steps;
 
             interval_t min_L, min_U;
             for (int i = 0; i < steps; ++i) {
@@ -1091,20 +1089,18 @@ void LSV<PREC>::compute_ellipses() {
 
                 interval_t x = interval_t(3) / 4 - a * cos(t),
                            y = b * sin(t);
-
+// {0.265303,0.26531}, norm_point_C_: {0.138778,0.138803}
                 interval_t r = sqrt(x * x + y * y),
-                           phi = atan2(y, x),
-                           rg = pow(r, g);
+                           phi = atan2(y, x);
 
-                interval_t dist = sqrt(
-                        rg * rg + 2 * q * rg * cos(g * phi) + q2
-                        );
+                // real part of (x + i y)^\gamma
+                interval_t re = pow(r, g) * cos(g * phi);
 
-                if (i == 0 || bmp::lower(dist) < min_L) min_L = bmp::lower(dist);
-                if (i == 0 || bmp::upper(dist) < min_U) min_U = bmp::upper(dist);
+                if (i == 0 || bmp::lower(re) < min_L) min_L = bmp::lower(re);
+                if (i == 0 || bmp::upper(re) < min_U) min_U = bmp::upper(re);
             }
-            verify(min_L > q);
-            return pow(interval_t(min_L, min_U) - q, g_inv);
+            verify(min_L > 0);
+            return pow(interval_t(min_L, min_U), g_inv);
         };
     norm_point_C_plus_ = norm_point(rho_C_plus_);
     norm_point_C_ = norm_point(rho_C_);
