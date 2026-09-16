@@ -777,18 +777,6 @@ class LSV {
                 return r;
             };
 
-            auto n_choose_k = [] (int n, int k) -> interval_t {
-                if (k < 0 || k > n) return 0;
-                if (k > n / 2)
-                    k = n - k;
-
-                interval_t r(1);
-                for (int j = 1; j <= k; j++) {
-                    r = (r * (n - j + 1)) / j;
-                }
-                return r;
-            };
-
             // norm of I - \bpi between ellipses with
             // parameters rho_1 and rho_2
             auto norm_I_pi = [N] (interval_t rho_1, interval_t rho_2) {
@@ -837,9 +825,10 @@ class LSV {
 
             int n = 0;
             for (MatrixXi bDelta_n = bDelta; ; n++) {
-                interval_t d = 0;
-                for (int k = 0; k <= n; k++)
-                    d += n_choose_k(n, k) * norm_bDelta[k] * pow(eps, n - k);
+                interval_t d = norm_bDelta[n];
+                for (int k = 0; k <= n - 1; k++) {
+                    d += eps * delta[n - 1 - k] * norm_bDelta[k];
+                }
                 delta.push_back(d);
 
                 if (bmp::upper(delta[n]) < 0.5 || n > 4)
