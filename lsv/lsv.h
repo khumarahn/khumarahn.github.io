@@ -153,7 +153,7 @@ class LSV {
         // angle of sector S_C
         interval_t theta_C_;
         // parameters \rho of the ellipses
-        interval_t rho_A_, rho_B_, rho_C_, rho_B_plus_, rho_C_plus_;
+        interval_t rho_A_, rho_C_, rho_A_plus_, rho_C_plus_;
         // points, sum at which bounds the transfer operator norm
         interval_t norm_point_A_, norm_point_C_, norm_point_C_plus_;
 
@@ -249,8 +249,7 @@ class LSV {
             compute_derivatives_cs();
             compute_sum_small_const_error();
 
-            interval_t CB_ratio = rho_C_ / rho_B_,
-                       CA_ratio = rho_C_ / rho_A_;
+            interval_t CA_ratio = rho_C_ / rho_A_;
             std::cout
                 << " done\n"
                 << "  gamma_: " << gamma_
@@ -260,11 +259,9 @@ class LSV {
                 << ",  NEED_DIGITS_: " << NEED_DIGITS_ << "\n"
                 << "  N_: " << N_ << "\n"
                 << "  theta_C_: " << theta_C_
-                << ", rho_A_: " << rho_A_ << ", rho_B_: " << rho_B_
-                << ", rho_C_: " << rho_C_ << "\n"
-                << "  rho_B_plus_: " << rho_B_plus_
+                << ", rho_A_: " << rho_A_ << ", rho_C_: " << rho_C_ << "\n"
+                << "  rho_A_plus_: " << rho_A_plus_
                 << ", rho_C_plus_: " << rho_C_plus_ << "\n"
-                << "  rho_C_ / rho_B_: " << bmp::lower(CB_ratio)
                 << ", rho_C_ / rho_A_: " << bmp::lower(CA_ratio) << "\n"
                 << "  norm_point_A_: " << norm_point_A_
                 << ", norm_point_C_: " << norm_point_C_ << "\n"
@@ -688,7 +685,7 @@ class LSV {
                 VectorXi Cj(N_), Bbk(N_);
                 for (int k = 0; k < N_; k++) {
                     Cj(k) = pow(rho_C_plus_, k);
-                    Bbk(k) = (pow(rho_B_plus_, k) + pow(rho_B_plus_, -k))
+                    Bbk(k) = (pow(rho_A_plus_, k) + pow(rho_A_plus_, -k))
                             * norm_plus_C2N;
                     Bbk(k) = bmp::upper(Bbk(k));
                 }
@@ -709,6 +706,29 @@ class LSV {
         h_meta_t h_meta() const {
             return h_meta(Lind());
         }
+
+        static MatrixXi approx_inverse(const MatrixXi &M) {
+            verify(M.rows() == M.cols());
+
+            int n = M.rows();
+
+            using MatrixXl = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
+            MatrixXl Ml(n, n);
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < n; ++j) {
+                    Ml(i, j) = (double) bmp::median(M(i, j));
+                }
+            }
+            MatrixXl Mli = Ml.inverse();
+            MatrixXi R(n, n);
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < n; ++j) {
+                    R(i, j) = Mli(i, j);
+                }
+            }
+            return R;
+        }
+
         h_meta_t h_meta(const MatrixXi &L) const {
             h_meta_t meta;
 
@@ -788,58 +808,49 @@ class LSV {
 
             // more norms
             interval_t norm_I_pi_C_A = norm_I_pi(rho_C_, rho_A_),
-                       norm_I_pi_A_B = norm_I_pi(rho_A_, rho_B_),
-                       norm_L_B_A = bmp::upper(cheb_sum(norm_point_A_)(0)),
-                       norm_L_B_C = bmp::upper(cheb_sum(norm_point_C_)(0)),
-                       norm_L_A_C = norm_L_B_C,
-                       norm_u_iota_I_pi_A = norm_I_pi(rho_A_, 1);
+                       norm_L_A_C = bmp::upper(cheb_sum(norm_point_C_)(0));
 
-            interval_t eps = norm_I_pi_C_A * norm_L_A_C
-                + norm_I_pi_C_A * norm_L_B_C * norm_I_pi_A_B
-                + norm_L_B_A * norm_I_pi_A_B
-                + norm_u_iota_I_pi_A;
-            eps = bmp::upper(eps);
+            interval_t norm_Delta_A_C = 1 + norm_L_A_C;
+            norm_Delta_A_C = bmp::upper(norm_Delta_A_C);
 
-            interval_t eps_prime = norm_I_pi_C_A * norm_L_A_C;
-            eps_prime = bmp::upper(eps_prime);
-
-            // print all norms above:
-            std::cout << "Computing norms and eps:\n"
-                << "  norm_I_pi_C_A: " << norm_I_pi_C_A
-                << ", norm_I_pi_A_B: " << norm_I_pi_A_B << "\n"
-                << "  norm_L_B_A: " << norm_L_B_A
-                << ", norm_L_B_C: " << norm_L_B_C
-                << ", norm_L_A_C: " << norm_L_A_C << "\n"
-                << "  norm_u_iota_I_pi_A: " << norm_u_iota_I_pi_A << "\n"
-                << "  eps: " << eps
-                << ", eps_prime: " << eps_prime << "\n";
-
-            verify(eps < 0.1);
+            interval_t norm_Delta_bDelta_W_A = norm_I_pi_C_A * norm_L_A_C;
+            norm_Delta_bDelta_W_A = bmp::upper(norm_Delta_bDelta_W_A);
 
             const MatrixXi bDelta = L - u * iota.transpose();
+            MatrixXi I_bDelta = MatrixXi::Identity(N, N) - bDelta;
+            MatrixXi R = approx_inverse(I_bDelta);
 
+            interval_t norm_R_A_A = norm_Q(R, rho_A_, rho_A_);
+            interval_t norm_pi_C_A = 1 + norm_I_pi_C_A;
 
-            std::vector<interval_t> delta;
-            std::vector<interval_t> norm_bDelta;
-            norm_bDelta.push_back(1);
+            MatrixXi I_minus_I_bDelta_R = MatrixXi::Identity(N, N) - I_bDelta * R;
+            interval_t norm_I_minus_I_bDelta_R_A_A = norm_Q(I_minus_I_bDelta_R, rho_A_, rho_A_);
 
-            int n = 0;
-            for (MatrixXi bDelta_n = bDelta; ; n++) {
-                interval_t d = norm_bDelta[n];
-                for (int k = 0; k <= n - 1; k++) {
-                    d += eps * delta[n - 1 - k] * norm_bDelta[k];
-                }
-                delta.push_back(d);
+            interval_t norm_Z_A_A = 1 + norm_R_A_A * norm_pi_C_A * norm_Delta_A_C;
+            norm_Z_A_A = bmp::upper(norm_Z_A_A);
 
-                if (bmp::upper(delta[n]) < 0.5 || n > 4)
-                    break;
+            interval_t norm_E_A_A = norm_I_minus_I_bDelta_R_A_A * norm_pi_C_A * norm_Delta_A_C
+                + norm_I_pi_C_A * norm_L_A_C * norm_Z_A_A;
+            norm_E_A_A = bmp::upper(norm_E_A_A);
 
-                norm_bDelta.push_back(norm_Q(bDelta_n, rho_A_, rho_C_));
-                bDelta_n *= bDelta;
-            }
+            std::cout << "Bounding error of h; norms:\n"
+                << "  norm_I_pi_C_A: " << norm_I_pi_C_A
+                << ", norm_L_A_C: " << norm_L_A_C << "\n"
+                << "  norm_Delta_A_C: " << norm_Delta_A_C
+                << ", norm_Delta_bDelta_W_A: " << norm_Delta_bDelta_W_A << "\n"
+                << "  norm_R_A_A: " << norm_R_A_A
+                << ", norm_pi_C_A: " << norm_pi_C_A << "\n"
+                << "  norm_I_minus_I_bDelta_R_A_A: " << norm_I_minus_I_bDelta_R_A_A
+                << ", norm_Z_A_A: " << norm_Z_A_A
+                << ", norm_E_A_A: " << norm_E_A_A << "\n";
 
-            verify(delta[n] < 0.5);
-            std::cout << "  delta[" << n << "] = " << delta[n] << " < 0.5\n";
+            verify(norm_E_A_A < 1);
+
+            interval_t norm_inv_I_Delta_A_A = norm_Z_A_A / (1 - norm_E_A_A);
+            norm_inv_I_Delta_A_A = bmp::upper(norm_inv_I_Delta_A_A);
+
+            interval_t C_h_A = norm_inv_I_Delta_A_A * norm_Delta_bDelta_W_A;
+            C_h_A = bmp::upper(C_h_A);
 
             meta.rho_A = rho_A_;
 
@@ -848,11 +859,7 @@ class LSV {
             std::cout << "Bound on norm of h in A: " << norm_h_A << "\n";
 
             {   // error
-                interval_t err = 0;
-                for (int k = 0; k < n; k++)
-                    err += delta[k];
-
-                err *= 2 * eps_prime * norm_h_A;
+                interval_t err = C_h_A * norm_h_A;
                 meta.err = bmp::upper(err);
             }
 
@@ -1041,28 +1048,19 @@ void LSV<PREC>::compute_ellipses() {
     rho_C_ = pow(rho_max, interval_t(7) / 8);
     rho_C_ = bmp::lower(rho_C_);
 
-    // B
-    i_t s_B = 1 + (rho_C_ + 1 / rho_C_) / 2;
-    rho_B_ = (s_B + sqrt(s_B * s_B - 4)) / 2;
-    rho_B_ = bmp::upper(rho_B_);
+    // A
+    i_t s_A = 1 + (rho_C_ + 1 / rho_C_) / 2;
+    rho_A_ = (s_A + sqrt(s_A * s_A - 4)) / 2;
+    rho_A_ = bmp::upper(rho_A_);
 
     // C+
     rho_C_plus_ = exp((4 * log(rho_max) + 1 * log(rho_C_)) / 5);
     rho_C_plus_ = bmp::lower(rho_C_plus_);
 
-    // B+
-    i_t s_B_plus = 1 + (rho_C_plus_ + 1 / rho_C_plus_) / 2;
-    rho_B_plus_ = (s_B_plus + sqrt(s_B_plus * s_B_plus - 4)) / 2;
-    rho_B_plus_ = bmp::upper(rho_B_plus_);
-
-    // A
-    // a weighted geometric mean, perhaps maximizing
-    // the ratio rho_C_ / rho_A_
-    i_t mlogeps = log(i_t(2)) * PREC_;
-    i_t wC = 12 / (mlogeps + 12);
-    i_t wB = 1 - wC;
-    rho_A_ = exp(wB * log(rho_B_) + wC * log(rho_C_));
-    rho_A_ = bmp::median(rho_A_);
+    // A+
+    i_t s_A_plus = 1 + (rho_C_plus_ + 1 / rho_C_plus_) / 2;
+    rho_A_plus_ = (s_A_plus + sqrt(s_A_plus * s_A_plus - 4)) / 2;
+    rho_A_plus_ = bmp::upper(rho_A_plus_);
 
     auto norm_point = [g = gamma_, g_inv = gamma_inv_, pi = pi_]
         (const interval_t& rho) -> interval_t {
@@ -1095,7 +1093,8 @@ void LSV<PREC>::compute_ellipses() {
     norm_point_C_ = norm_point(rho_C_);
     norm_point_A_ = norm_point(rho_A_);
 
-    verify(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_ && rho_C_ < rho_C_plus_);
+    verify(0 < rho_A_ && rho_A_ < rho_C_
+            && rho_A_ < rho_A_plus_ && rho_C_ < rho_C_plus_);
     verify(0 < bmp::lower(norm_point_C_plus_)
             && bmp::lower(norm_point_C_plus_) < bmp::lower(norm_point_C_)
             && bmp::lower(norm_point_C_) < bmp::lower(norm_point_A_));
@@ -1114,7 +1113,7 @@ LSV<PREC>::abel_meta_t LSV<PREC>::compute_abel_stuff(int n, bool rough) const {
     abel.coef.resize(n + 3);
     abel.coef_ni.resize(n + 3);
 
-    verify(0 < rho_B_ && rho_B_ < rho_A_ && rho_A_ < rho_C_);
+    verify(0 < rho_A_ && rho_A_ < rho_C_);
 
     {   // first compute non-constant coefficients (am1, al, a1, a2, ...) of the Abel function
         VectorXi b = VectorXi::Zero(abel.n + 2);
