@@ -712,14 +712,15 @@ class LSV {
 
             int n = M.rows();
 
-            using MatrixXl = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
-            MatrixXl Ml(n, n);
+            using lo = double;
+            using MatrixXlo = Eigen::Matrix<lo, Eigen::Dynamic, Eigen::Dynamic>;
+            MatrixXlo Ml(n, n);
             for (int i = 0; i < n; ++i) {
                 for (int j = 0; j < n; ++j) {
-                    Ml(i, j) = (double) bmp::median(M(i, j));
+                    Ml(i, j) = lo(bmp::median(M(i, j)));
                 }
             }
-            MatrixXl Mli = Ml.inverse();
+            MatrixXlo Mli = Ml.inverse();
             MatrixXi R(n, n);
             for (int i = 0; i < n; ++i) {
                 for (int j = 0; j < n; ++j) {
@@ -756,41 +757,52 @@ class LSV {
 
             // *** Now h and L are computed
 
-            // norm of an operator given by a matrix
+            // norm of an operator given by a matrix, a rough estimate,
             // corresponding to Lemma \ref{lem:mnorm}
             auto norm_Q = [] (const MatrixXi& Q, interval_t rho_A, interval_t rho_C) {
                 verify(Q.cols() == Q.rows());
                 int n = Q.cols();
 
-                VectorXi d_C(n), inv_d_A(n);
-                d_C(0) = interval_t(1) / 2;
+                // do everything in low precision
+                const int ROUGH_DIGITS = 15;
+                verify(ROUGH_DIGITS < DIGITS);
+                using rough_t          = bmp::number<bmp::mpfr_float_backend<ROUGH_DIGITS>>;
+                using rough_interval_t = bmp::number<bmp::mpfi_float_backend<ROUGH_DIGITS>>;
+                using rough_VectorX   = Eigen::Matrix<rough_interval_t, Eigen::Dynamic, 1>;
+                using rough_MatrixX   = Eigen::Matrix<rough_interval_t, Eigen::Dynamic, Eigen::Dynamic>;
+
+                rough_interval_t rough_rho_A(rho_A),
+                                 rough_rho_C(rho_C);
+
+                rough_VectorX d_C(n), inv_d_A(n);
+                d_C(0) = rough_interval_t(1) / 2;
                 inv_d_A(0) = 2;
                 for (int k = 1; k < n; k++) {
-                    d_C(k) = sqrt(pow(rho_C, 2*k) + pow(rho_C, -2*k)) / 2;
-                    inv_d_A(k) = 2 / sqrt(pow(rho_A, 2*k) + pow(rho_A, -2*k));
+                    d_C(k) = sqrt(pow(rough_rho_C, 2*k) + pow(rough_rho_C, -2*k)) / 2;
+                    inv_d_A(k) = 2 / sqrt(pow(rough_rho_A, 2*k) + pow(rough_rho_A, -2*k));
                 }
 
-                interval_t K_AC_sq = 1;
+                rough_interval_t K_AC_sq = 1;
                 for (int k = 1; k < n; k++) {
-                    interval_t num = pow(pow(rho_A, k) + pow(rho_A, -k), 2);
-                    interval_t den = pow(rho_C, 2*k) + pow(rho_C, -2*k);
+                    rough_interval_t num = pow(pow(rough_rho_A, k) + pow(rough_rho_A, -k), 2);
+                    rough_interval_t den = pow(rough_rho_C, 2*k) + pow(rough_rho_C, -2*k);
                     K_AC_sq += num / den;
                 }
-                interval_t K_AC = sqrt(K_AC_sq);
+                rough_interval_t K_AC = sqrt(K_AC_sq);
 
-                MatrixXi DQD(n, n);
-                real_t max_DQD_width = 0;
+                rough_MatrixX DQD_rough(n, n);
+                rough_t max_DQD_width = 0;
                 for (int j = 0; j < n; j++) {
                     for (int k = 0; k < n; k++) {
-                        DQD(j, k) = d_C(j) * Q(j, k) * inv_d_A(k);
-                        max_DQD_width = max(max_DQD_width, bmp::width(DQD(j, k)));
+                        DQD_rough(j, k) = rough_interval_t(d_C(j) * Q(j, k) * inv_d_A(k));
+                        max_DQD_width = max(max_DQD_width, bmp::width(DQD_rough(j, k)));
                     }
                 }
                 //std::cout << "Max width of the intervals in DQD: " << max_DQD_width
                 //    << "  [bad if large]\n";
                 verify(max_DQD_width < 0.001);
 
-                interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD);
+                rough_interval_t DQD_norm = interval_root_ns::matrix_L2_norm(DQD_rough);
 
                 interval_t r = K_AC * DQD_norm;
                 r = bmp::upper(r);
@@ -808,7 +820,9 @@ class LSV {
 
             // more norms
             interval_t norm_I_pi_C_A = norm_I_pi(rho_C_, rho_A_),
-                       norm_L_A_C = bmp::upper(cheb_sum(norm_point_C_)(0));
+                       norm_pi_C_A = 1 + norm_I_pi_C_A;
+
+            interval_t norm_L_A_C = bmp::upper(cheb_sum(norm_point_C_)(0));
 
             interval_t norm_Delta_A_C = 1 + norm_L_A_C;
             norm_Delta_A_C = bmp::upper(norm_Delta_A_C);
@@ -820,8 +834,9 @@ class LSV {
             MatrixXi I_bDelta = MatrixXi::Identity(N, N) - bDelta;
             MatrixXi R = approx_inverse(I_bDelta);
 
-            interval_t norm_R_A_A = norm_Q(R, rho_A_, rho_A_);
-            interval_t norm_pi_C_A = 1 + norm_I_pi_C_A;
+            MatrixXi RmI = R - MatrixXi::Identity(R.rows(), R.cols());
+            interval_t rho_AC = sqrt(rho_A_ * rho_C_);
+            interval_t norm_R_A_A = 1 + norm_Q(RmI, rho_A_, rho_AC);
 
             MatrixXi I_minus_I_bDelta_R = MatrixXi::Identity(N, N) - I_bDelta * R;
             interval_t norm_I_minus_I_bDelta_R_A_A = norm_Q(I_minus_I_bDelta_R, rho_A_, rho_A_);
@@ -844,6 +859,7 @@ class LSV {
                 << ", norm_Z_A_A: " << norm_Z_A_A
                 << ", norm_E_A_A: " << norm_E_A_A << "\n";
 
+            verify(norm_I_minus_I_bDelta_R_A_A < 1);
             verify(norm_E_A_A < 1);
 
             interval_t norm_inv_I_Delta_A_A = norm_Z_A_A / (1 - norm_E_A_A);
