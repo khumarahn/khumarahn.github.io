@@ -48,7 +48,7 @@ lsv-cpp.js: Makefile *.cpp *.h $(GMP_LIB) $(MPFR_LIB) $(MPFI_LIB)
 LL = -I../external/eigen -Wall -std=c++23 -lgmp -lmpfr -lmpfi -fopenmp -ljemalloc
 
 #DD = -g -fsanitize=address,leak,undefined
-DD = -g -fsanitize=undefined
+#DD = -g -fsanitize=undefined
 
 test:
 	clang++ $(LL) $(DD) -O3 -march=native lsv-test.cpp -o lsv-test.x

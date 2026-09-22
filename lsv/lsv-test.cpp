@@ -24,7 +24,7 @@ int main() {
 
     // 0
     //lsv.set_alpha(0.875);
-    lsv.set_gamma(interval_t(95) / 100 + interval_t(-1, 1) * pow(10.0, 5 - lsv.DIGITS));
+    lsv.set_gamma(interval_t(95) / 100 + interval_t(-1, 1) * pow(interval_t(10), 5 - lsv.DIGITS));
     // 1
     lsv.compute_L();
     // 2
