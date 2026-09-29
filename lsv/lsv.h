@@ -1438,8 +1438,8 @@ void LSV<PREC>::compute_sum_small_const_error() {
     interval_t E = R_L;
 
     // error in D_L without C_\psi
-    E += pi_ * pi_ * e_ * nu * vk /
-        ( 3 *
+    E += pi_ * pi_ * e_ *e_ * nu * vk /
+        ( 3 * sqrt(interval_t(2 * abel_.L - 1)) *
           (pow((2 * pi_ * e_ * nu * vk) / (2 * abel_.L - 1), 2) - 1) *
           (exp(interval_t(abel_.M)) - 1)
         );
