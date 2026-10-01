@@ -28,8 +28,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      #- name: update
-      #  run: sudo apt-get update -y -q
+      - name: update
+        run: sudo apt-get update -y -q
       #- name: upgrade
       #  run: sudo apt-get upgrade -y -q
       - name: install eigen
