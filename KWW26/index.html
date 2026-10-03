@@ -3,6 +3,7 @@
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>KWW26: computations for LSV maps</title>
         <script src="https://cdn.plot.ly/plotly-3.6.0.min.js" charset="utf-8"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
         <style>
@@ -14,7 +15,21 @@
     </head>
 
     <body>
-        <h3>Intermittent map</h3>
+        <h2>Rigorous computations in intermittent dynamics</h2>
+        <div>
+            Welcome to the companion web page for the paper
+            <a href="https://arxiv.org/abs/2610.01879">arXiv:2610.01879</a>
+            by Alexey Korepanov, YuTong Wei and Caroline Wormell,
+            where we rigorously estimate the invariant state of
+            Liverani-Saussol-Vaienti intermittent maps.
+        </div>
+
+        <div>
+            This page serves as a mere illustration.
+            To see its source code or to run your own computations, visit
+            <br><a href="https://github.com/khumarahn/khumarahn.github.io/tree/main/KWW26">https://github.com/khumarahn/khumarahn.github.io/tree/main/KWW26</a>,
+        </div>
+        <h3>LSV map</h3>
         <div>
             Consider the standard Liverani-Saussol-Vaienti map \(T \colon [0,1] \to [0,1]\) with parameter \(\alpha &gt; 0\):
             \[
@@ -27,7 +42,7 @@
         </div>
         <div id='lsv'></div>
         <div style="width: 75%;margin: auto;">
-            \(\alpha\): <span id="alphaValue"></span>
+            \(\alpha\): <span id="alphaValue" style="cursor: pointer;"></span>
             <br>
             <input id="alphaSlider" style="width:100%" type="range" min="0" max="256" value="48"
             class="slider" onchange="alphaChange();" oninput="alphaInput();">

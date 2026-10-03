@@ -61,7 +61,8 @@ class LSV : public BaseLSV {
         interval_t cheb_range(const interval_cheb_t &p);
 
     public:
-        void set_alpha(double alpha) {
+        void set_alpha(const std::string &num, const std::string &den) {
+            interval_t alpha = interval_t(num) / interval_t(den);
             interval_t gamma = 1 / (
                     alpha + interval_t(-1,1) * 1e-50
                     );

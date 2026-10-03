@@ -26,9 +26,7 @@ function runOrders() {
         let e = orders.shift();
 
         if (e.type === 'compute-bounds') {
-            let alpha = e.alpha;
-
-            lsv_cpp.set_alpha(alpha);
+            lsv_cpp.set_alpha(e.alpha_num, e.alpha_den);
             lsv_cpp.compute_L();
             lsv_cpp.compute_h_meta();
             lsv_cpp.compute_h_cheb();
