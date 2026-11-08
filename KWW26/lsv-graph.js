@@ -161,6 +161,13 @@ worker.onmessage = function(e) {
         \end{align*}
         \(h(x)\) on \((0, 1]\) satisfies:
         \[
+            h' \leq ::max_hp::
+            \quad \text{and} \quad
+            h'' \geq ::min_hpp::
+            ,
+        \]
+        and
+        \[
             \Bigl( \frac{h'}{h} \Bigr)' \geq ::hp::
             \quad \text{and} \quad
             \Bigl( \frac{h''}{h} \Bigr)' \leq ::hpp::
@@ -171,6 +178,8 @@ worker.onmessage = function(e) {
 
         thm = thm.replaceAll('::alpha_minus::', m.alpha_minus)
             .replaceAll('::alpha_plus::', m.alpha_plus)
+            .replaceAll('::max_hp::', m.max_hp)
+            .replaceAll('::min_hpp::', m.min_hpp)
             .replaceAll('::hp::', m.min_hp_h_prime)
             .replaceAll('::hpp::', m.max_hpp_h_prime);
 

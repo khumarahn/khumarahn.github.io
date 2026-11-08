@@ -37,6 +37,10 @@ class LSV : public BaseLSV {
         interval_t min_hp_h_prime_,
                    max_hpp_h_prime_;
 
+        // upper bound on h' and lower bound on h''
+        interval_t max_hp_,
+                   min_hpp_;
+
         // step counter so that we don't miss something
         int computation_step_;
 
@@ -289,6 +293,10 @@ class LSV : public BaseLSV {
                 return real_to_string(bmp::lower(min_hp_h_prime_), -5, false);
             } else if (q == "max_hpp_h_prime") {
                 return real_to_string(bmp::upper(max_hpp_h_prime_), -5, true);
+            } else if (q == "max_hp") {
+                return real_to_string(bmp::upper(max_hp_), -5, true);
+            } else if (q == "min_hpp") {
+                return real_to_string(bmp::lower(min_hpp_), -5, false);
             } else if (q == "alpha" || q == "alpha-" || q == "alpha+") {
                 real_t a1 = bmp::upper(1 / interval_t(bmp::upper(gamma_))),
                        a2 = bmp::lower(1 / interval_t(bmp::lower(gamma_)));
@@ -651,7 +659,13 @@ void LSV::compute_derivative_bounds() {
         min_hp3 = max(-C(k, 3), min_hp3);
     }
 
-    std::cout << "  ... done. h'''(x) <= " << min_hp3 << " ∎\n";
+    // since h'' > 0 and h''' < 0 on (0, 1], h' is increasing and h'' is decreasing
+    max_hp_ = UPPER(Hp1(1));
+    min_hpp_ = LOWER(Hp2(1));
+
+    std::cout << "  ... done. h'(x) <= h'(1) <= " << max_hp_
+        << ", h''(x) >= h''(1) >= " << min_hpp_
+        << ", h'''(x) <= " << min_hp3 << " ∎\n";
 
     {
         // start with a bound on (0, x_star]
@@ -717,6 +731,8 @@ void LSV::compute_derivative_bounds() {
     std::cout << "\nWait, I can forget all that and just extrapolate:\n\n";
 
     std::cout << "Theorem. On (0,1]:\n"
+        << "  h' <= " << max_hp_ << "\n"
+        << "  h'' >= " << min_hpp_ << "\n"
         << "  (h'/h)' >= " << min_hp_h_prime_ << "\n"
         << "  (h''/h)' <= " << max_hpp_h_prime_ << "\n";
 
@@ -730,7 +746,7 @@ void LSV::compute_derivative_bounds() {
 
     std::cout << "\n  ....  hmmmmm  ....  \n\n";
 
-    verify(min_hp_h_prime_ > 0 && max_hpp_h_prime_ < 0);
+    verify(max_hp_ < 0 && min_hpp_ > 0 && min_hp_h_prime_ > 0 && max_hpp_h_prime_ < 0);
 
 } // derivative bounds
 

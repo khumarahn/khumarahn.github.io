@@ -44,6 +44,8 @@ function runOrders() {
                 alpha:              lsv_cpp.oracle("alpha"),
                 alpha_minus:        lsv_cpp.oracle("alpha-"),
                 alpha_plus:         lsv_cpp.oracle("alpha+"),
+                max_hp:             lsv_cpp.oracle("max_hp"),
+                min_hpp:            lsv_cpp.oracle("min_hpp"),
                 min_hp_h_prime:     lsv_cpp.oracle("min_hp_h_prime"),
                 max_hpp_h_prime:    lsv_cpp.oracle("max_hpp_h_prime"),
                 tau_minus:          lsv_cpp.oracle("tau-"),
