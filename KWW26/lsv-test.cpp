@@ -60,8 +60,8 @@ int main() {
 
     std::cout << lsv.oracle("min_hp_h_prime") << "\n"
         << lsv.oracle("max_hpp_h_prime") << "\n"
-        << lsv.oracle("max_hp") << "\n"
-        << lsv.oracle("min_hpp") << "\n"
+        << lsv.oracle("max_hp_h") << "\n"
+        << lsv.oracle("min_hpp_h") << "\n"
         << lsv.oracle("alpha") << "\n"
         << lsv.oracle("gamma") << "\n";
 

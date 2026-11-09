@@ -161,9 +161,9 @@ worker.onmessage = function(e) {
         \end{align*}
         \(h(x)\) on \((0, 1]\) satisfies:
         \[
-            h' \leq ::max_hp::
+            \frac{h'}{h} \leq ::max_hp_h::
             \quad \text{and} \quad
-            h'' \geq ::min_hpp::
+            \frac{h''}{h} \geq ::min_hpp_h::
             ,
         \]
         and
@@ -178,8 +178,8 @@ worker.onmessage = function(e) {
 
         thm = thm.replaceAll('::alpha_minus::', m.alpha_minus)
             .replaceAll('::alpha_plus::', m.alpha_plus)
-            .replaceAll('::max_hp::', m.max_hp)
-            .replaceAll('::min_hpp::', m.min_hpp)
+            .replaceAll('::max_hp_h::', m.max_hp_h)
+            .replaceAll('::min_hpp_h::', m.min_hpp_h)
             .replaceAll('::hp::', m.min_hp_h_prime)
             .replaceAll('::hpp::', m.max_hpp_h_prime);
 
